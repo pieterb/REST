@@ -1,14 +1,8 @@
 <?php
 
 /*·************************************************************************
- * Copyright © 2008 by SARA Computing and Networking Services             *
- * pieterb@sara.nl                                                        *
+ * Copyright © 2008 by Pieter van Beek <pieterb@sara.nl>                                                        *
  **************************************************************************/
-
-# This file handles HTTP method spoofing (DELETE through GET and PUT
-# through POST, and uses XSLT to translate incoming www-form-urlencoded
-# data.
-
 
 ###########################
 # HANDLE METHOD SPOOFING: #
@@ -16,23 +10,25 @@
 if ($_SERVER['REQUEST_METHOD'] == 'POST' and
     isset($_GET['method'])) {
   $_GET['method'] = strtoupper($_GET['method']);
-  if ($_GET['method'] == 'DELETE' or
-      $_GET['method'] == 'GET' or
-      $_GET['method'] == 'PUT')
+  if ($_GET['method'] == 'PUT') {
+    $_SERVER['REQUEST_METHOD'] = 'PUT';
+    unset( $_GET['method'] );
+  } elseif ($_GET['method'] == 'DELETE' or
+            $_GET['method'] == 'GET') {
     $_SERVER['REQUEST_METHOD'] = $_GET['method'];
-  else
+    $_GET = $_POST;
+    $_POST = array();
+  } else
     REST::inst()->fatal(
-        'METHOD_NOT_ALLOWED', <<<EOS
-405 Method Not Allowed
-You tried to tunnel an HTTP {$_GET['method']} request through an HTTP {$_SERVER['REQUEST_METHOD']} request.
-EOS
-      );
-  unset($_GET['method']);
+      'BAD_REQUEST',
+      "You tried to spoof an HTTP {$_GET['method']} request in an HTTP {$_SERVER['REQUEST_METHOD']} request."
+    );
   $_SERVER['QUERY_STRING'] = http_build_query($_GET);
-  $_SERVER['REQUEST_URI'] = $_SERVER['SCRIPT_NAME'];
+  $_SERVER['REQUEST_URI'] = substr( $_SERVER['REQUEST_URI'], 0, strpos( $_SERVER['REQUEST_URI'], '?' ) );
   if ($_SERVER['QUERY_STRING'] != '')
     $_SERVER['REQUEST_URI'] .= '?' . $_SERVER['QUERY_STRING'];
 }
+
 
 ##############
 # CLASS REST #
