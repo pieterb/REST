@@ -1,7 +1,7 @@
 <?php
 
 /*·************************************************************************
- * Copyright © 2008 by Pieter van Beek <pieterb@sara.nl>                                                        *
+ * Copyright © 2008 by Pieter van Beek <pieterb@sara.nl>                  *
  **************************************************************************/
 
 ###########################
@@ -141,10 +141,11 @@ function best_content_type($mime_types, $fallback = null) {
  * Content-Type, e.g.<code>$rest->header('text/plain')</code> is exactly
  * equivalent to
  * <code>$rest->header(array('Content-Type' => 'text/plain'));</code>
+ * @param $webdav bool Send the 'X-WebDAV-Status' header?
  * @return REST $this
  * @see status_code()
  */
-public function header($properties) {
+public function header($properties, $webdav = false) {
   if (is_string($properties))
     $properties = array( 'Content-Type' => $properties );
   if (isset($properties['status'])) {
@@ -152,10 +153,17 @@ public function header($properties) {
       $_SERVER['SERVER_PROTOCOL'] . ' ' .
       $this->status_code($properties['status'])
     );
+    if ($this->i_webdav_provider !== null) {
+      header(
+        'X-WebDAV-Status: ' .
+        $this->status_code($properties['status'])
+      );
+      header( 'X-Dav-Powered-By' . $this->i_webdav_provider );
+    }
     unset( $properties['status'] );
   }
   if (isset($properties['Location']))
-    $properties['Location'] = $this->full_path($properties['Location']);
+    $properties['Location'] = $this->path2url($properties['Location']);
   foreach($properties as $key => $value)
     header("$key: $value");
 }
@@ -203,7 +211,9 @@ public function urlbase() {
 
 
 /**
+ * Translate any path into a full URL, taking $_SERVER['SCRIPT_NAME'] as base.
  * @deprecated in favor of path2url()
+ * @return string
  */
 public function full_path( $path ) {
   if ( preg_match( '/^\\w+:/', $path ) ) # full path:
@@ -229,8 +239,18 @@ public function full_path( $path ) {
 
 
 /**
- * Translate any path into a full URL
- * @param string $path
+ * Returns $_SERVER['REQUEST_URI'] minus the query string.
+ * @return string
+ */
+public function requestPath() {
+  preg_match('/^([^?]*)/', $_SERVER['REQUEST_URI'], $matches);
+  return $matches[1];
+}
+
+
+/**
+ * Translate any path into a full URL, like a browser would.
+ * @param string $p_path
  * @return string
  */
 public function path2url( $p_path ) {
@@ -240,8 +260,9 @@ public function path2url( $p_path ) {
     return $this->urlbase() . $p_path;
   # relative path:
   preg_match('/^([^?]*)/', $_SERVER['REQUEST_URI'], $matches);
-  $dir = substr( $matches[1], 0,
-                 strrpos( $matches[1], '/' ) );
+  $requestPath = $this->requestPath();
+  $dir = substr( $requestPath, 0,
+                 strrpos( $requestPath, '/' ) );
   if ($dir == '') $dir = '/';
   foreach (split( '/', $p_path ) as $value) {
     switch ($value) {
@@ -320,6 +341,22 @@ public function xml_header($encoding = 'UTF-8', $version = '1.0') {
 public function xsl_header($url) {
   $url = htmlentities($this->full_path($url));
   return "<?xml-stylesheet type=\"text/xsl\" href=\"$url\"?>\n";
+}
+
+/**
+ * WebDAV Provider
+ * @var string
+ */
+private $i_webdav_provider = null;
+/**
+ * Get/set the WebDAV state.
+ * @param string $p_webdav Optionally, the new WebDAV provider name
+ * @return string the current WebDAV provider, or null.
+ */
+public function webdavProvider($p_provider = null) {
+  $retval = $this->i_webdav_provider;
+  if ( $p_provider !== null ) $this->i_webdav_provider = "$p_provider";
+  return $retval;
 }
 
 # HTTP Status Codes:
