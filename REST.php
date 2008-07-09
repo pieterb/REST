@@ -53,7 +53,7 @@ public static function inst() {
 private function __construct() {}
 
 /**
- * Parsed version of $_SERVER['HTTP_ACCEPT'].
+ * Cache for http_accept()
  * @var array
  */
 private $HTTP_ACCEPT = null;
@@ -161,7 +161,13 @@ public function header($properties) {
 }
 
 
+/**
+ * @deprecated in favor of $baseurl
+ */
 private $base = null;
+/**
+ * @deprecated in favor of urlbase()
+ */
 public function base() {
   if ( is_null( $this->base ) ) {
     $this->base = isset($_SERVER['HTTPS']) ? 'https://' : 'http://';
@@ -174,6 +180,31 @@ public function base() {
 }
 
 
+/**
+ * Cache for urlbase()
+ * @var string
+ */
+private $urlbase = null;
+/**
+ * Returns the base URI.
+ * The base URI is 'protocol://server.name:port'
+ * @return string
+ */
+public function urlbase() {
+  if ( is_null( $this->urlbase ) ) {
+    $this->urlbase = (@$_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
+    $this->urlbase .= $_SERVER['SERVER_NAME'];
+    if ( ! (@$_SERVER['HTTPS'] === 'on') && $_SERVER['SERVER_PORT'] != 80 or
+           (@$_SERVER['HTTPS'] === 'on') && $_SERVER['SERVER_PORT'] != 443 )
+      $this->urlbase .= ":{$_SERVER['SERVER_PORT']}";
+  }
+  return $this->urlbase;
+}
+
+
+/**
+ * @deprecated in favor of path2url()
+ */
 public function full_path( $path ) {
   if ( preg_match( '/^\\w+:/', $path ) ) # full path:
     return $path;
@@ -198,12 +229,43 @@ public function full_path( $path ) {
 
 
 /**
+ * Translate any path into a full URL
+ * @param string $path
+ * @return string
+ */
+public function path2url( $p_path ) {
+  if ( preg_match( '/^\\w+:/', $p_path ) ) # full path:
+    return $p_path;
+  if ( substr($p_path, 0, 1) == '/' ) # absolute path:
+    return $this->urlbase() . $p_path;
+  # relative path:
+  preg_match('/^([^?]*)/', $_SERVER['REQUEST_URI'], $matches);
+  $dir = substr( $matches[1], 0,
+                 strrpos( $matches[1], '/' ) );
+  if ($dir == '') $dir = '/';
+  foreach (split( '/', $p_path ) as $value) {
+    switch ($value) {
+    case '..':
+      $dir = dirname($dir);
+      break;
+    case '.':
+      break;
+    default:
+      if ($dir != '/') $dir .= '/';
+      $dir .= $value;
+    }
+  }
+  return $this->urlbase() . $dir;
+}
+
+
+/**
  * Sends error code to client
  * @param $status string The status code to send to the client
  * @param $message string The message in the content body
- * @return void This function never returns.
+ * @return void
  */
-public function fatal($status, $message, $stylesheet = null) {
+public function error($status, $message, $stylesheet = null) {
   $this->header(array(
     'status'       => $status,
     'Content-Type' => 'text/html; charset=utf-8'
@@ -226,6 +288,17 @@ public function fatal($status, $message, $stylesheet = null) {
   </body>
 </html>
 EOS;
+}
+
+
+/**
+ * Sends error code to client
+ * @param $status string The status code to send to the client
+ * @param $message string The message in the content body
+ * @return void This function never returns.
+ */
+public function fatal($status, $message, $stylesheet = null) {
+  $this->error($status, $message, $stylesheet);
   exit;
 }
 
