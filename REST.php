@@ -141,11 +141,10 @@ function best_content_type($mime_types, $fallback = null) {
  * Content-Type, e.g.<code>$rest->header('text/plain')</code> is exactly
  * equivalent to
  * <code>$rest->header(array('Content-Type' => 'text/plain'));</code>
- * @param $webdav bool Send the 'X-WebDAV-Status' header?
  * @return REST $this
  * @see status_code()
  */
-public function header($properties, $webdav = false) {
+public function header($properties) {
   if (is_string($properties))
     $properties = array( 'Content-Type' => $properties );
   if (isset($properties['status'])) {
