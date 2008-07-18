@@ -285,12 +285,14 @@ public function path2url( $p_path ) {
  * @param $message string The message in the content body
  * @return void
  */
-public function error($status, $message, $stylesheet = null) {
+public function error($status, $message = '', $stylesheet = null) {
   $this->header(array(
     'status'       => $status,
     'Content-Type' => 'text/html; charset=utf-8'
   ));
-  if (substr($message, 1) <> '<') $message = "<p id=\"message\">$message</p>";
+  if ( $message !== '' &&
+       ! preg_match( '/^\\s*</', $message ) )
+    $message = "<p>$message</p>";
   if (!empty($stylesheet))
     $stylesheet = '<link rel="stylesheet" type="text/css" href="' .
       $this->full_path($stylesheet) . '" />';
@@ -317,7 +319,7 @@ EOS;
  * @param $message string The message in the content body
  * @return void This function never returns.
  */
-public function fatal($status, $message, $stylesheet = null) {
+public function fatal($status, $message = '', $stylesheet = null) {
   $this->error($status, $message, $stylesheet);
   exit;
 }
