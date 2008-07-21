@@ -13,8 +13,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' and
   if ($_GET['method'] == 'PUT') {
     $_SERVER['REQUEST_METHOD'] = 'PUT';
     unset( $_GET['method'] );
-  } elseif ($_GET['method'] == 'DELETE' or
-            $_GET['method'] == 'GET') {
+  } elseif (in_array( $_GET['method'],
+                      array( 'DELETE', 'GET', 'MKCOL' ) ) ) {
     $_SERVER['REQUEST_METHOD'] = $_GET['method'];
     $_GET = $_POST;
     $_POST = array();
@@ -169,7 +169,7 @@ public function header($properties) {
 
 
 /**
- * @deprecated in favor of $baseurl
+ * @deprecated in favor of $urlbase
  */
 private $base = null;
 /**
