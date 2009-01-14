@@ -8,25 +8,21 @@
 # HANDLE METHOD SPOOFING: #
 ###########################
 if ($_SERVER['REQUEST_METHOD'] == 'POST' and
-    isset($_GET['method'])) {
-  $_GET['method'] = strtoupper($_GET['method']);
-  if ($_GET['method'] == 'PUT') {
-    $_SERVER['REQUEST_METHOD'] = 'PUT';
-    unset( $_GET['method'] );
-  } elseif (in_array( $_GET['method'],
-                      array( 'DELETE', 'GET', 'MKCOL' ) ) ) {
-    $_SERVER['REQUEST_METHOD'] = $_GET['method'];
+    isset($_GET['http_method'])) {
+  $http_method = strtoupper( $_GET['http_method'] );
+  unset( $_GET['http_method'] );
+  if ($http_method === 'GET' &&
+      @$_SERVER['CONTENT_TYPE'] === 'application/x-www-form-urlencoded') {
     $_GET = $_POST;
     $_POST = array();
-  } else
-    REST::inst()->fatal(
-      'BAD_REQUEST',
-      "You tried to spoof an HTTP {$_GET['method']} request in an HTTP {$_SERVER['REQUEST_METHOD']} request."
-    );
+  }
   $_SERVER['QUERY_STRING'] = http_build_query($_GET);
-  $_SERVER['REQUEST_URI'] = substr( $_SERVER['REQUEST_URI'], 0, strpos( $_SERVER['REQUEST_URI'], '?' ) );
+  $_SERVER['REQUEST_URI'] =
+    substr( $_SERVER['REQUEST_URI'], 0,
+            strpos( $_SERVER['REQUEST_URI'], '?' ) );
   if ($_SERVER['QUERY_STRING'] != '')
     $_SERVER['REQUEST_URI'] .= '?' . $_SERVER['QUERY_STRING'];
+  $_SERVER['REQUEST_METHOD'] = $http_method;
 }
 
 
@@ -36,50 +32,90 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' and
 /**
  * A singleton to REST-enable your scripts.
  */
-final class REST {
+class REST {
 
 
-/** @var REST */
-private static $INSTANCE = null;
 /**
- * Singleton factory.
- * @return REST
+ * @var resource
  */
-public static function inst() {
-  if (is_null(self::$INSTANCE)) self::$INSTANCE = new REST();
-  return self::$INSTANCE;
+private static $inputhandle = null;
+/**
+ * @return resource filehandle
+ */
+public static function inputhandle() {
+  if (self::$inputhandle === null) {
+    self::$inputhandle = tmpfile();
+    $input = fopen('php://input', 'r');
+    if ( isset( $_SERVER['CONTENT_LENGTH'] ) ) {
+      $contentlength = $_SERVER['CONTENT_LENGTH'];
+      while ( !feof($input) && $contentlength ) {
+        $block = fread( $input, $contentlength );
+        $contentlength -= strlen( $block );
+        fwrite( self::$inputhandle, $block );
+      }
+    }
+    elseif ( $_SERVER['HTTP_TRANSFER_ENCODING'] == 'chunked' ) {
+      while ( !feof($input) )
+        fwrite( self::$inputhandle, fgetc( $input ) );
+    }
+    fclose( $input );
+  }
+  fseek(self::$inputhandle, 0);
+  return self::$inputhandle;
 }
-/** Constructor */
-private function __construct() {}
+
+
 
 /**
- * Cache for http_accept()
+ * Returns an HTTP date as per HTTP/1.1 definition.
+ * @param int $timestamp A unix timestamp
+ * @return string
+ */
+public static function http_date($timestamp) {
+  return gmdate( 'D, d M Y H:i:s \\G\\M\\T', $timestamp );
+}
+
+
+/**
+ * Check the If-Modified-Since request header.
+ * @param $timestamp int Unix timestamp of the last modification of the current
+ *        resource.
+ * @return bool TRUE if the current resource has been modified, otherwise FALSE.
+ */
+public static function check_if_modified_since( $timestamp ) {
+  if (empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
+    return true;
+  return strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) < $timestamp;
+}
+
+
+/**
+ * Parsed version of $_SERVER['HTTP_ACCEPT'].
  * @var array
  */
-private $HTTP_ACCEPT = null;
+private static $HTTP_ACCEPT = null;
 /**
  * Parsed version of $_SERVER['HTTP_ACCEPT']
  * @return array array( 'mime_type' => array( 'qualifier' => &lt;value&gt;, ...), ... )
  */
-public function http_accept() {
-  if ($this->HTTP_ACCEPT === null) {
-    $this->HTTP_ACCEPT = array();
-    // Initialize $this->HTTP_ACCEPT
-    if (isset( $_SERVER['HTTP_ACCEPT'] ) &&
-        $_SERVER['HTTP_ACCEPT'] !== '') {
+public static function http_accept() {
+  if (self::$HTTP_ACCEPT === null) {
+    self::$HTTP_ACCEPT = array();
+    // Initialize self::$HTTP_ACCEPT
+    if (!empty($_SERVER['HTTP_ACCEPT'])) {
       $mime_types = explode(',', $_SERVER['HTTP_ACCEPT']);
       foreach ($mime_types as $value) {
         $value = split(';', $value);
-        $mt = array_shift($value);
-        $this->HTTP_ACCEPT[$mt]['q'] = 1.0;
+        $mt = trim(array_shift($value));
+        self::$HTTP_ACCEPT[$mt]['q'] = 1.0;
         foreach ($value as $v)
           if (preg_match('/^\s*([^\s=]+)\s*=\s*([^;]+?)\s*$/', $v, $matches))
-            $this->HTTP_ACCEPT[$mt][$matches[1]] =
+            self::$HTTP_ACCEPT[$mt][$matches[1]] =
               is_numeric($matches[2]) ? (float)$matches[2] : $matches[2];
       }
     }
   }
-  return $this->HTTP_ACCEPT;
+  return self::$HTTP_ACCEPT;
 }
 
 /**
@@ -99,30 +135,40 @@ public function http_accept() {
  * @return string Please note that if <var>$fallback<var> isn't set, this
  *         method might not return at all.
  */
-function best_content_type($mime_types, $fallback = null) {
+public static function best_content_type($mime_types, $fallback = null) {
   $retval = $fallback;
   $best = -1;
-  foreach ($this->http_accept() as $key => $value) {
-    $regexp = preg_quote( $key, '/' );
-    $regexp = str_replace('\\*', '.*', $regexp);
+  foreach (self::http_accept() as $key => $value) {
+    $regexp = preg_quote( $key, '|' );
+    $regexp = str_replace('\\*', '[^/]*', $regexp);
     foreach ($mime_types as $mkey => $mvalue) {
-      if (preg_match("/^{$regexp}\$/", $mkey)) {
+      if (preg_match("|^{$regexp}(?:\\s*;.*)?\$|", $mkey)) {
         $q = (float)($value['q']) * (float)($mvalue);
         if ($q > $best) {
           $best = $q;
-          $retval = $key;
+          $retval = $mkey;
         }
       }
     }
   }
+//  // Debug stuff:
+//  header('Content-Type: text/plain');
+//  var_export(array($mime_types, self::http_accept(), $best, $retval));
+//  exit;
   if (is_null($retval)) {
-    $this->fatal(
+    self::fatal(
       'NOT_ACCEPTABLE',
-      "Sorry, we couldn't agree on a mime-type. I can serve any of the following:\n" .
-      join( "\n", array_keys( $mime_types ) )
+      '<p>Sorry, we couldn\'t agree on a mime-type. I can serve any of the following:</p><ul><li>' .
+      join( '</li><li>', array_keys( $mime_types ) ) . '</li></ul>'
     );
   }
   return $retval;
+}
+
+
+public static function best_xhtml_type() {
+  return (strstr($_SERVER['HTTP_USER_AGENT'], 'MSIE') === false) ?
+    'application/xhtml+xml' : 'text/html';
 }
 
 
@@ -144,172 +190,81 @@ function best_content_type($mime_types, $fallback = null) {
  * @return REST $this
  * @see status_code()
  */
-public function header($properties) {
+public static function header($properties) {
   if (is_string($properties))
     $properties = array( 'Content-Type' => $properties );
   if (isset($properties['status'])) {
     header(
       $_SERVER['SERVER_PROTOCOL'] . ' ' .
-      $this->status_code($properties['status'])
+      self::status_code($properties['status'])
     );
-    if ($this->i_webdav_provider !== null) {
-      header(
-        'X-WebDAV-Status: ' .
-        $this->status_code($properties['status'])
-      );
-      header( 'X-Dav-Powered-By' . $this->i_webdav_provider );
-    }
     unset( $properties['status'] );
   }
   if (isset($properties['Location']))
-    $properties['Location'] = $this->path2url($properties['Location']);
+    $properties['Location'] = self::rel2url($properties['Location']);
   foreach($properties as $key => $value)
     header("$key: $value");
 }
 
 
 /**
- * @deprecated in favor of $urlbase
- */
-private $base = null;
-/**
- * @deprecated in favor of urlbase()
- */
-public function base() {
-  if ( is_null( $this->base ) ) {
-    $this->base = isset($_SERVER['HTTPS']) ? 'https://' : 'http://';
-    $this->base .= $_SERVER['SERVER_NAME'];
-    if ( ! isset($_SERVER['HTTPS']) && $_SERVER['SERVER_PORT'] != 80 or
-           isset($_SERVER['HTTPS']) && $_SERVER['SERVER_PORT'] != 443 )
-      $this->base .= ":{$_SERVER['SERVER_PORT']}";
-  }
-  return $this->base;
-}
-
-
-/**
- * Cache for urlbase()
+ * Cache for urlbase().
  * @var string
  */
-private $urlbase = null;
+private static $URLBASE = null;
 /**
  * Returns the base URI.
  * The base URI is 'protocol://server.name:port'
  * @return string
  */
-public function urlbase() {
-  if ( is_null( $this->urlbase ) ) {
-    $this->urlbase = (@$_SERVER['HTTPS'] === 'on') ? 'https://' : 'http://';
-    $this->urlbase .= $_SERVER['SERVER_NAME'];
-    if ( ! (@$_SERVER['HTTPS'] === 'on') && $_SERVER['SERVER_PORT'] != 80 or
-           (@$_SERVER['HTTPS'] === 'on') && $_SERVER['SERVER_PORT'] != 443 )
-      $this->urlbase .= ":{$_SERVER['SERVER_PORT']}";
+public static function urlbase() {
+  if ( is_null( self::$URLBASE ) ) {
+    //DAV::debug('$_SERVER: ' . var_export($_SERVER, true));
+    self::$URLBASE = empty($_SERVER['HTTPS']) ?
+      'http://' : 'https://';
+    self::$URLBASE .= $_SERVER['SERVER_NAME'];
+    if ( !empty($_SERVER['HTTPS']) && $_SERVER['SERVER_PORT'] != 443 or
+          empty($_SERVER['HTTPS']) && $_SERVER['SERVER_PORT'] != 80 )
+      self::$URLBASE .= ":{$_SERVER['SERVER_PORT']}";
   }
-  return $this->urlbase;
+  return self::$URLBASE;
 }
 
 
 /**
- * Translate any path into a full URL, taking $_SERVER['SCRIPT_NAME'] as base.
- * @deprecated in favor of path2url()
+ * Yet another URL encoder.
+ * See the code for details.
+ * @param string $url
  * @return string
  */
-public function full_path( $path ) {
-  if ( preg_match( '/^\\w+:/', $path ) ) # full path:
-    return $path;
-  if ( substr($path, 0, 1) == '/' ) # absolute path:
-    return $this->base() . $path;
-  # relative path:
-  $dir = dirname($_SERVER['SCRIPT_NAME']);
-  foreach (split( '/', $path ) as $value) {
-    switch ($value) {
-    case '..':
-      $dir = dirname($dir);
-      break;
-    case '.':
-      break;
-    default:
-      if ($dir != '/') $dir .= '/';
-      $dir .= $value;
-    }
+public static function urlencode($url) {
+  $newurl = '';
+  for ($i = 0; $i < strlen($url); $i++) {
+    $ord = ord($url[$i]);
+    if ( $ord >= ord('a') && $ord <= ord('z') ||
+         $ord >= ord('A') && $ord <= ord('Z') ||
+         $ord >= ord('0') && $ord <= ord('9') ||
+         strpos( ';/?:@=&~$-_.+!*\'(),', $url[$i] ) !== false )
+         // Strictly spoken, the tilde ~ should be encoded as well, but I
+         // don't do that. This makes sure URL's like http://some.com/~user/
+         // don't get mangled, at the risk of problems during transport.
+      $newurl .= $url[$i];
+    else
+      $newurl .= sprintf('%%%2X', $ord);
   }
-  return $this->base() . $dir;
+  return $newurl;
 }
 
 
 /**
- * Returns $_SERVER['REQUEST_URI'] minus the query string.
+ * Translate an relative URL to a full URL.
+ * @param string $relativeURL
  * @return string
  */
-public function requestPath() {
-  preg_match('/^([^?]*)/', $_SERVER['REQUEST_URI'], $matches);
-  return $matches[1];
-}
-
-
-/**
- * Translate any path into a full URL, like a browser would.
- * @param string $p_path
- * @return string
- */
-public function path2url( $p_path ) {
-  if ( preg_match( '/^\\w+:/', $p_path ) ) # full path:
-    return $p_path;
-  if ( substr($p_path, 0, 1) == '/' ) # absolute path:
-    return $this->urlbase() . $p_path;
-  # relative path:
-  preg_match('/^([^?]*)/', $_SERVER['REQUEST_URI'], $matches);
-  $requestPath = $this->requestPath();
-  $dir = substr( $requestPath, 0,
-                 strrpos( $requestPath, '/' ) );
-  if ($dir == '') $dir = '/';
-  foreach (split( '/', $p_path ) as $value) {
-    switch ($value) {
-    case '..':
-      $dir = dirname($dir);
-      break;
-    case '.':
-      break;
-    default:
-      if ($dir != '/') $dir .= '/';
-      $dir .= $value;
-    }
-  }
-  return $this->urlbase() . $dir;
-}
-
-
-/**
- * Sends error code to client
- * @param $status string The status code to send to the client
- * @param $message string The message in the content body
- * @return void
- */
-public function error($status, $message = '', $stylesheet = null) {
-  $this->header(array(
-    'status'       => $status,
-    'Content-Type' => 'text/html; charset=utf-8'
-  ));
-  if ( $message !== '' &&
-       ! preg_match( '/^\\s*</', $message ) )
-    $message = "<p>$message</p>";
-  if (!empty($stylesheet))
-    $stylesheet = '<link rel="stylesheet" type="text/css" href="' .
-      $this->full_path($stylesheet) . '" />';
-  $status_code = $this->status_code($status);
-  echo $this->xml_header() . <<<EOS
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
-  <head>
-    <title>$status_code</title>
-    $stylesheet
-  </head>
-  <body>
-    <h1 id="status_code">HTTP/1.1 $status_code</h1>
-    $message
-  </body>
-</html>
-EOS;
+public static function rel2url( $relativeURL ) {
+  if (!preg_match('/^\\w+:/', $relativeURL))
+    $relativeURL = self::urlbase() . $relativeURL;
+  return $relativeURL;
 }
 
 
@@ -319,8 +274,29 @@ EOS;
  * @param $message string The message in the content body
  * @return void This function never returns.
  */
-public function fatal($status, $message = '', $stylesheet = null) {
-  $this->error($status, $message, $stylesheet);
+public static function fatal($status, $message = '', $stylesheet = null) {
+  self::header(array(
+    'status'       => $status,
+    'Content-Type' => self::best_xhtml_type() . '; charset=UTF-8'
+  ));
+  if (!preg_match('/^\\s*</s', $message))
+  	$message = "<p id=\"message\">$message</p>";
+  if (!empty($stylesheet))
+    $stylesheet = '<link rel="stylesheet" type="text/css" href="' .
+      $stylesheet . '" />';
+  $status_code = self::status_code($status);
+  echo self::xml_header() . <<<EOS
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>$status_code</title>$stylesheet
+  </head>
+  <body>
+    <h1 id="status_code">HTTP/1.1 $status_code</h1>
+    $message
+  </body>
+</html>
+EOS;
   exit;
 }
 
@@ -329,39 +305,26 @@ public function fatal($status, $message = '', $stylesheet = null) {
  * The default xml header
  * @return string The xml header with proper version and encoding
  */
-public function xml_header($encoding = 'UTF-8', $version = '1.0') {
+public static function xml_header($encoding = 'UTF-8', $version = '1.0') {
   return "<?xml version=\"$version\" encoding=\"$encoding\"?>\n";
 }
 
 
 /**
  * An xsl parser directive header
- * @param $url string the url of the xsl stylsheet to use
+ * @param $url string URL of the stylesheet.
  * @return string An xsl parser directive, pointing at <code>$url</code>
  */
-public function xsl_header($url) {
-  $url = htmlentities($this->full_path($url));
+public static function xsl_header($url) {
+  $url = htmlentities(self::rel2url($url));
   return "<?xml-stylesheet type=\"text/xsl\" href=\"$url\"?>\n";
 }
 
 /**
- * WebDAV Provider
- * @var string
+ * HTTP Status Codes
+ * @var array
  */
-private $i_webdav_provider = null;
-/**
- * Get/set the WebDAV state.
- * @param string $p_webdav Optionally, the new WebDAV provider name
- * @return string the current WebDAV provider, or null.
- */
-public function webdavProvider($p_provider = null) {
-  $retval = $this->i_webdav_provider;
-  if ( $p_provider !== null ) $this->i_webdav_provider = "$p_provider";
-  return $retval;
-}
-
-# HTTP Status Codes:
-private $STATUS_CODES = array(
+private static $STATUS_CODES = array(
   'CONTINUE'                       => '100 Continue',
   'SWITCHING_PROTOCOLS'            => '101 Switching Protocols',
   'PROCESSING'                     => '102 Processing', # A WebDAV extension
@@ -374,7 +337,7 @@ private $STATUS_CODES = array(
   'PARTIAL_CONTENT'                => '206 Partial Content',
   'MULTI-STATUS'                   => '207 Multi-Status', # A WebDAV extension
   'MULTIPLE_CHOICES'               => '300 Multiple Choices',
-  'MOVED PERMANENTLY'              => '301 Moved Permanently',
+  'MOVED_PERMANENTLY'              => '301 Moved Permanently',
   'FOUND'                          => '302 Found',
   'SEE_OTHER'                      => '303 See Other', # HTTP/1.1 only
   'NOT_MODIFIED'                   => '304 Not Modified',
@@ -416,10 +379,14 @@ private $STATUS_CODES = array(
   'BANDWIDTH_LIMIT_EXCEEDED'       => '509 Bandwidth Limit Exceeded',
   'NOT_EXTENDED'                   => '510 Not Extended', # an RFC2774 extension
 );
-public function status_code($name) {
-  if (!isset($this->STATUS_CODES[$name]))
+/**
+ * @param $name string some string
+ * @return unknown_type
+ */
+public static function status_code($name) {
+  if (!isset(self::$STATUS_CODES[$name]))
     throw new Exception("Unknown status $name");
-  return $this->STATUS_CODES[$name];
+  return self::$STATUS_CODES[$name];
 }
 
 
