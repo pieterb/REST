@@ -36,6 +36,22 @@ class REST {
 
 
 /**
+ * Require certain HTTP method(s).
+ * This method takes a variable number of arguments.
+ *
+ * On failure, this method sends an HTTP/1.1 Method Not Allowed,
+ * and doesn't return!
+ * @return void
+ */
+public static function require_method() {
+  foreach (func_get_args() as $value)
+    if ($_SERVER['REQUEST_METHOD'] === $value)
+      return;
+  self::fatal(self::HTTP_METHOD_NOT_ALLOWED);
+}
+
+
+/**
  * @var resource
  */
 private static $inputhandle = null;
