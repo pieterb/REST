@@ -151,10 +151,6 @@ public static function best_content_type($mime_types, $fallback = null) {
       }
     }
   }
-//  // Debug stuff:
-//  header('Content-Type: text/plain');
-//  var_export(array($mime_types, self::http_accept(), $best, $retval));
-//  exit;
   if (is_null($retval)) {
     self::fatal(
       'NOT_ACCEPTABLE',
@@ -272,9 +268,9 @@ public static function rel2url( $relativeURL ) {
  * Sends error code to client
  * @param $status string The status code to send to the client
  * @param $message string The message in the content body
- * @return void This function never returns.
+ * @return void
  */
-public static function fatal($status, $message = '', $stylesheet = null) {
+public static function error($status, $message = '', $stylesheet = null) {
   self::header(array(
     'status'       => $status,
     'Content-Type' => self::best_xhtml_type() . '; charset=UTF-8'
@@ -302,6 +298,19 @@ EOS;
 
 
 /**
+ * Calls error() and exits.
+ * @return void This function never returns.
+ */
+public static function fatal() {
+  call_user_func_array(
+    array('REST', 'error'),
+    func_get_args()
+  );
+  exit;
+}
+
+
+/**
  * The default xml header
  * @return string The xml header with proper version and encoding
  */
@@ -320,76 +329,133 @@ public static function xsl_header($url) {
   return "<?xml-stylesheet type=\"text/xsl\" href=\"$url\"?>\n";
 }
 
+
+const HTTP_CONTINUE                        = 100;
+const HTTP_SWITCHING_PROTOCOLS             = 101;
+const HTTP_PROCESSING                      = 102;
+const HTTP_OK                              = 200;
+const HTTP_CREATED                         = 201;
+const HTTP_ACCEPTED                        = 202;
+const HTTP_NON_AUTHORITATIVE_INFORMATION   = 203;
+const HTTP_NO_CONTENT                      = 204;
+const HTTP_RESET_CONTENT                   = 205;
+const HTTP_PARTIAL_CONTENT                 = 206;
+const HTTP_MULTI_STATUS                    = 207;
+const HTTP_MULTIPLE_CHOICES                = 300;
+const HTTP_MOVED_PERMANENTLY               = 301;
+const HTTP_FOUND                           = 302;
+const HTTP_SEE_OTHER                       = 303;
+const HTTP_NOT_MODIFIED                    = 304;
+const HTTP_USE_PROXY                       = 305;
+const HTTP_SWITCH_PROXY                    = 306;
+const HTTP_TEMPORARY_REDIRECT              = 307;
+const HTTP_BAD_REQUEST                     = 400;
+const HTTP_UNAUTHORIZED                    = 401;
+const HTTP_PAYMENT_REQUIRED                = 402;
+const HTTP_FORBIDDEN                       = 403;
+const HTTP_NOT_FOUND                       = 404;
+const HTTP_METHOD_NOT_ALLOWED              = 405;
+const HTTP_NOT_ACCEPTABLE                  = 406;
+const HTTP_PROXY_AUTHENTICATION_REQUIRED   = 407;
+const HTTP_REQUEST_TIMEOUT                 = 408;
+const HTTP_CONFLICT                        = 409;
+const HTTP_GONE                            = 410;
+const HTTP_LENGTH_REQUIRED                 = 411;
+const HTTP_PRECONDITION_FAILED             = 412;
+const HTTP_REQUEST_ENTITY_TOO_LARGE        = 413;
+const HTTP_REQUEST_URI_TOO_LONG            = 414;
+const HTTP_UNSUPPORTED_MEDIA_TYPE          = 415;
+const HTTP_REQUESTED_RANGE_NOT_SATISFIABLE = 416;
+const HTTP_EXPECTATION_FAILED              = 417;
+const HTTP_UNPROCESSABLE_ENTITY            = 422;
+const HTTP_LOCKED                          = 423;
+const HTTP_FAILED_DEPENDENCY               = 424;
+const HTTP_UNORDERED_COLLECTION            = 425;
+const HTTP_UPGRADE_REQUIRED                = 426;
+const HTTP_RETRY_WITH                      = 449;
+const HTTP_INTERNAL_SERVER_ERROR           = 500;
+const HTTP_NOT_IMPLEMENTED                 = 501;
+const HTTP_BAD_GATEWAY                     = 502;
+const HTTP_SERVICE_UNAVAILABLE             = 503;
+const HTTP_GATEWAY_TIMEOUT                 = 504;
+const HTTP_HTTP_VERSION_NOT_SUPPORTED      = 505;
+const HTTP_VARIANT_ALSO_VARIES             = 506;
+const HTTP_INSUFFICIENT_STORAGE            = 507;
+const HTTP_BANDWIDTH_LIMIT_EXCEEDED        = 509;
+const HTTP_NOT_EXTENDED                    = 510;
+
+
 /**
  * HTTP Status Codes
  * @var array
  */
 private static $STATUS_CODES = array(
-  'CONTINUE'                       => '100 Continue',
-  'SWITCHING_PROTOCOLS'            => '101 Switching Protocols',
-  'PROCESSING'                     => '102 Processing', # A WebDAV extension
-  'OK'                             => '200 OK',
-  'CREATED'                        => '201 Created',
-  'ACCEPTED'                       => '202 Accepted',
-  'NON-AUTHORITATIVE_INFORMATION'  => '203 Non-Authoritative Information', # HTTP/1.1 only
-  'NO_CONTENT'                     => '204 No Content',
-  'RESET_CONTENT'                  => '205 Reset Content',
-  'PARTIAL_CONTENT'                => '206 Partial Content',
-  'MULTI-STATUS'                   => '207 Multi-Status', # A WebDAV extension
-  'MULTIPLE_CHOICES'               => '300 Multiple Choices',
-  'MOVED_PERMANENTLY'              => '301 Moved Permanently',
-  'FOUND'                          => '302 Found',
-  'SEE_OTHER'                      => '303 See Other', # HTTP/1.1 only
-  'NOT_MODIFIED'                   => '304 Not Modified',
-  'USE_PROXY'                      => '305 Use Proxy', # HTTP/1.1 only
-  'SWITCH_PROXY'                   => '306 Switch Proxy',
-  'TEMPORARY_REDIRECT'             => '307 Temporary Redirect', # HTTP/1.1 only
-  'BAD_REQUEST'                    => '400 Bad Request',
-  'UNAUTHORIZED'                   => '401 Unauthorized',
-  'PAYMENT_REQUIRED'               => '402 Payment Required',
-  'FORBIDDEN'                      => '403 Forbidden',
-  'NOT_FOUND'                      => '404 Not Found',
-  'METHOD_NOT_ALLOWED'             => '405 Method Not Allowed',
-  'NOT_ACCEPTABLE'                 => '406 Not Acceptable',
-  'PROXY_AUTHENTICATION_REQUIRED'  => '407 Proxy Authentication Required',
-  'REQUEST_TIMEOUT'                => '408 Request Timeout',
-  'CONFLICT'                       => '409 Conflict',
-  'GONE'                           => '410 Gone',
-  'LENGTH_REQUIRED'                => '411 Length Required',
-  'PRECONDITION_FAILED'            => '412 Precondition Failed',
-  'REQUEST_ENTITY_TOO_LARGE'       => '413 Request Entity Too Large',
-  'REQUEST-URI_TOO_LONG'           => '414 Request-URI Too Long',
-  'UNSUPPORTED_MEDIA_TYPE'         => '415 Unsupported Media Type',
-  'REQUESTED_RANGE_NOT_SATISFIABLE'=> '416 Requested Range Not Satisfiable',
-  'EXPECTATION_FAILED'             => '417 Expectation Failed',
-  'UNPROCESSABLE_ENTITY'           => '422 Unprocessable Entity', # A WebDAV/RFC2518 extension
-  'LOCKED'                         => '423 Locked', # A WebDAV/RFC2518 extension
-  'FAILED_DEPENDENCY'              => '424 Failed Dependency', # A WebDAV/RFC2518 extension
-  'UNORDERED_COLLECTION'           => '425 Unordered Collection',
-  'UPGRADE_REQUIRED'               => '426 Upgrade Required', # an RFC2817 extension
-  'RETRY_WITH'                     => '449 Retry With', # a Microsoft extension
-  'INTERNAL_SERVER_ERROR'          => '500 Internal Server Error',
-  'NOT_IMPLEMENTED'                => '501 Not Implemented',
-  'BAD_GATEWAY'                    => '502 Bad Gateway',
-  'SERVICE_UNAVAILABLE'            => '503 Service Unavailable',
-  'GATEWAY_TIMEOUT'                => '504 Gateway Timeout',
-  'HTTP_VERSION_NOT_SUPPORTED'     => '505 HTTP Version Not Supported',
-  'VARIANT_ALSO_VARIES'            => '506 Variant Also Negotiates', # an RFC2295 extension
-  'INSUFFICIENT_STORAGE'           => '507 Insufficient Storage (WebDAV)', # A WebDAV extension
-  'BANDWIDTH_LIMIT_EXCEEDED'       => '509 Bandwidth Limit Exceeded',
-  'NOT_EXTENDED'                   => '510 Not Extended', # an RFC2774 extension
+  self::HTTP_CONTINUE                        => '100 Continue',
+  self::HTTP_SWITCHING_PROTOCOLS             => '101 Switching Protocols',
+  self::HTTP_PROCESSING                      => '102 Processing', # A WebDAV extension
+  self::HTTP_OK                              => '200 OK',
+  self::HTTP_CREATED                         => '201 Created',
+  self::HTTP_ACCEPTED                        => '202 Accepted',
+  self::HTTP_NON_AUTHORITATIVE_INFORMATION   => '203 Non-Authoritative Information', # HTTP/1.1 only
+  self::HTTP_NO_CONTENT                      => '204 No Content',
+  self::HTTP_RESET_CONTENT                   => '205 Reset Content',
+  self::HTTP_PARTIAL_CONTENT                 => '206 Partial Content',
+  self::HTTP_MULTI_STATUS                    => '207 Multi-Status', # A WebDAV extension
+  self::HTTP_MULTIPLE_CHOICES                => '300 Multiple Choices',
+  self::HTTP_MOVED_PERMANENTLY               => '301 Moved Permanently',
+  self::HTTP_FOUND                           => '302 Found',
+  self::HTTP_SEE_OTHER                       => '303 See Other', # HTTP/1.1 only
+  self::HTTP_NOT_MODIFIED                    => '304 Not Modified',
+  self::HTTP_USE_PROXY                       => '305 Use Proxy', # HTTP/1.1 only
+  self::HTTP_SWITCH_PROXY                    => '306 Switch Proxy',
+  self::HTTP_TEMPORARY_REDIRECT              => '307 Temporary Redirect', # HTTP/1.1 only
+  self::HTTP_BAD_REQUEST                     => '400 Bad Request',
+  self::HTTP_UNAUTHORIZED                    => '401 Unauthorized',
+  self::HTTP_PAYMENT_REQUIRED                => '402 Payment Required',
+  self::HTTP_FORBIDDEN                       => '403 Forbidden',
+  self::HTTP_NOT_FOUND                       => '404 Not Found',
+  self::HTTP_METHOD_NOT_ALLOWED              => '405 Method Not Allowed',
+  self::HTTP_NOT_ACCEPTABLE                  => '406 Not Acceptable',
+  self::HTTP_PROXY_AUTHENTICATION_REQUIRED   => '407 Proxy Authentication Required',
+  self::HTTP_REQUEST_TIMEOUT                 => '408 Request Timeout',
+  self::HTTP_CONFLICT                        => '409 Conflict',
+  self::HTTP_GONE                            => '410 Gone',
+  self::HTTP_LENGTH_REQUIRED                 => '411 Length Required',
+  self::HTTP_PRECONDITION_FAILED             => '412 Precondition Failed',
+  self::HTTP_REQUEST_ENTITY_TOO_LARGE        => '413 Request Entity Too Large',
+  self::HTTP_REQUEST_URI_TOO_LONG            => '414 Request-URI Too Long',
+  self::HTTP_UNSUPPORTED_MEDIA_TYPE          => '415 Unsupported Media Type',
+  self::HTTP_REQUESTED_RANGE_NOT_SATISFIABLE => '416 Requested Range Not Satisfiable',
+  self::HTTP_EXPECTATION_FAILED              => '417 Expectation Failed',
+  self::HTTP_UNPROCESSABLE_ENTITY            => '422 Unprocessable Entity', # A WebDAV/RFC2518 extension
+  self::HTTP_LOCKED                          => '423 Locked', # A WebDAV/RFC2518 extension
+  self::HTTP_FAILED_DEPENDENCY               => '424 Failed Dependency', # A WebDAV/RFC2518 extension
+  self::HTTP_UNORDERED_COLLECTION            => '425 Unordered Collection',
+  self::HTTP_UPGRADE_REQUIRED                => '426 Upgrade Required', # an RFC2817 extension
+  self::HTTP_RETRY_WITH                      => '449 Retry With', # a Microsoft extension
+  self::HTTP_INTERNAL_SERVER_ERROR           => '500 Internal Server Error',
+  self::HTTP_NOT_IMPLEMENTED                 => '501 Not Implemented',
+  self::HTTP_BAD_GATEWAY                     => '502 Bad Gateway',
+  self::HTTP_SERVICE_UNAVAILABLE             => '503 Service Unavailable',
+  self::HTTP_GATEWAY_TIMEOUT                 => '504 Gateway Timeout',
+  self::HTTP_HTTP_VERSION_NOT_SUPPORTED      => '505 HTTP Version Not Supported',
+  self::HTTP_VARIANT_ALSO_VARIES             => '506 Variant Also Negotiates', # an RFC2295 extension
+  self::HTTP_INSUFFICIENT_STORAGE            => '507 Insufficient Storage (WebDAV)', # A WebDAV extension
+  self::HTTP_BANDWIDTH_LIMIT_EXCEEDED        => '509 Bandwidth Limit Exceeded',
+  self::HTTP_NOT_EXTENDED                    => '510 Not Extended', # an RFC2774 extension
 );
 /**
  * @param $name string some string
  * @return unknown_type
  */
-public static function status_code($name) {
-  if (!isset(self::$STATUS_CODES[$name]))
-    throw new Exception("Unknown status $name");
-  return self::$STATUS_CODES[$name];
+public static function status_code($code) {
+  if (!isset(self::$STATUS_CODES[$code]))
+    throw new Exception("Unknown status code $code");
+  return self::$STATUS_CODES[$code];
 }
 
 
 } # class REST
+
 
 ?>
