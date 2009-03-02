@@ -240,7 +240,7 @@ public static function urlencode($url) {
     if ( $ord >= ord('a') && $ord <= ord('z') ||
          $ord >= ord('A') && $ord <= ord('Z') ||
          $ord >= ord('0') && $ord <= ord('9') ||
-         strpos( ';/?:@=&~$-_.+!*\'(),', $url[$i] ) !== false )
+         strpos( '/-_.!~*\'()', $url[$i] ) !== false )
          // Strictly spoken, the tilde ~ should be encoded as well, but I
          // don't do that. This makes sure URL's like http://some.com/~user/
          // don't get mangled, at the risk of problems during transport.
