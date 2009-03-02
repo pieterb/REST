@@ -318,10 +318,8 @@ EOS;
  * @return void This function never returns.
  */
 public static function fatal() {
-  call_user_func_array(
-    array('REST', 'error'),
-    func_get_args()
-  );
+  $args = func_get_args();
+  call_user_func_array( array('REST', 'error'), $args );
   exit;
 }
 
