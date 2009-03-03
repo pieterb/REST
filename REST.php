@@ -75,8 +75,8 @@ public static function inputhandle() {
         fwrite( self::$inputhandle, fgetc( $input ) );
     }
     fclose( $input );
+    fseek(self::$inputhandle, 0);
   }
-  fseek(self::$inputhandle, 0);
   return self::$inputhandle;
 }
 
