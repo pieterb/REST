@@ -499,20 +499,20 @@ class RESTCollection {
 
 
   /**
-   * @param string $type one of 'text/html', 'text/json', 'text/csv', 'text/plain'
+   * @param string $type one of 'text/html', 'application/json', 'text/csv', 'text/plain'
    * @return object Directory
    */
   public static function factory($html_form = null) {
     //self::$html_form = $html_form;
     $best_xhtml_type = REST::best_xhtml_type();
     $type = REST::best_content_type(
-    array(
-    $best_xhtml_type => 1.0,
-        'text/plain' => 0.3,
-        'text/tdv' => 0.5,
-        'text/csv' => 0.8,
-        'text/json' => 1.0,
-    ), $best_xhtml_type
+      array(
+        $best_xhtml_type   => 1.0,
+        'text/plain'       => 0.3,
+        'text/tdv'         => 0.5,
+        'text/csv'         => 0.8,
+        'application/json' => 1.0,
+      ), $best_xhtml_type
     );
     REST::header("{$type}; charset=UTF-8");
     switch ($type) {
@@ -520,7 +520,7 @@ class RESTCollection {
       case 'text/html'            : return new RESTCollectionHTML($html_form);
       case 'text/tdv'             :
       case 'text/plain'           : return new RESTCollectionPlain($html_form);
-      case 'text/json'            : return new RESTCollectionJSON($html_form);
+      case 'application/json'     : return new RESTCollectionJSON($html_form);
       case 'text/csv'             : return new RESTCollectionCSV($html_form);
     }
   }
