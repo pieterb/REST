@@ -287,10 +287,14 @@ class REST {
    * @return void
    */
   public static function error($status, $message = '', $stylesheet = null) {
+    global $REST_STYLESHEET;
+    if ($stylesheet === null) $stylesheet = @$REST_STYLESHEET;
     self::header(array(
       'status'       => $status,
       'Content-Type' => self::best_xhtml_type() . '; charset=UTF-8'
     ));
+    if ($status >= 500)
+      mail($_SERVER['SERVER_ADMIN'], 'Portal error', $message);
     if (!preg_match('/^\\s*</s', $message))
     	$message = "<p id=\"message\">$message</p>";
     if (!empty($stylesheet))
@@ -309,7 +313,6 @@ class REST {
   </body>
 </html>
 EOS;
-    exit;
   }
   
   
@@ -626,7 +629,6 @@ class RESTCollectionHTML extends RESTCollection {
     if ($this->html_form !== null)
       echo $this->html_form;
     echo <<<EOS
-<h1>Contents</h1>
 <table class="toc" id="directory_index"><tbody>
 <tr><th class="name">Name</th><th class="size">Size</th><th class="description">Description</th></tr>
 EOS;
@@ -696,7 +698,6 @@ class RESTCollectionJSON extends RESTCollection {
   }
 
 } // class RESTCollectionJSON
-
 
 
 ?>
