@@ -294,7 +294,9 @@ class REST {
       'Content-Type' => self::best_xhtml_type() . '; charset=UTF-8'
     ));
     if ($status >= 500)
-      mail($_SERVER['SERVER_ADMIN'], 'Portal error', $message);
+      mail( $_SERVER['SERVER_ADMIN'], 'Portal error',
+            "$message\n\n" . var_export(debug_backtrace(), true) . "\n\n" .
+            var_export($_SERVER, true) );
     if (!preg_match('/^\\s*</s', $message))
     	$message = "<p id=\"message\">$message</p>";
     if (!empty($stylesheet))
