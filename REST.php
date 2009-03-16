@@ -333,6 +333,11 @@ EOS;
   }
   
   
+  public static function isValidURI($uri) {
+    return preg_match('@^[a-z]+:(?:%[a-fA-F0-9]{2}|[-\\w.~:/?#\\[\\]\\@!$&\'()*+,;=]+)+$@', $uri);
+  }
+  
+  
   /**
    * An xsl parser directive header
    * @param $url string URL of the stylesheet.
