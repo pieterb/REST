@@ -179,7 +179,7 @@ class REST {
   
   
   public static function best_xhtml_type() {
-    return (strstr($_SERVER['HTTP_USER_AGENT'], 'MSIE') === false) ?
+    return (strstr(@$_SERVER['HTTP_USER_AGENT'], 'MSIE') === false) ?
       'application/xhtml+xml' : 'text/html';
   }
   
