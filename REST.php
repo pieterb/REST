@@ -167,8 +167,9 @@ public static function best_content_type($mime_types, $fallback = null) {
 
 
 public static function best_xhtml_type() {
-  return (strstr($_SERVER['HTTP_USER_AGENT'], 'MSIE') === false) ?
-    'application/xhtml+xml' : 'text/html';
+  return (isset($_SERVER['HTTP_USER_AGENT']) &&
+          strstr(@$_SERVER['HTTP_USER_AGENT'], 'MSIE') !== false) ?
+    'text/html' : 'application/xhtml+xml';
 }
 
 
