@@ -479,5 +479,262 @@ EOS;
   }
 
 
-} # class REST
+} // class REST
+
+
+/**
+ * Renders directory content in various formats.
+ */
+class RESTDirectory {
+
+
+  /**
+   * @var string
+   */
+  protected $html_form = "";
+
+
+  /**
+   * @var bool
+   */
+  protected $header_sent = false;
+
+  
+  /**
+   * Abstract class has protected ctor;
+   */
+  protected function __construct($form) {
+    $this->html_form = $form;
+  }
+
+
+  /**
+   * @return object RESTDirectory
+   */
+  public static function factory() {
+    $best_xhtml_type = REST::best_xhtml_type();
+    $type = REST::best_content_type(
+    array(
+    $best_xhtml_type => 1.0,
+        'text/plain' => 0.3,
+        'text/tdv' => 0.5,
+        'text/csv' => 0.8,
+        'application/json' => 1.0,
+    ), $best_xhtml_type
+    );
+    REST::header("{$type}; charset=UTF-8");
+    switch ($type) {
+      case 'application/xhtml+xml':
+      case 'text/html'            : return new RESTDirectoryHTML();
+      case 'text/tdv'             :
+      case 'text/plain'           : return new RESTDirectoryPlain();
+      case 'application/json'     : return new RESTDirectoryJSON();
+      case 'text/csv'             : return new RESTDirectoryCSV();
+    }
+  }
+
+  
+  public static function setHTML($html_start, $html_end) {
+    RESTDirectoryHTML::setHTML($html_start, $html_end);
+  }
+  
+  
+  /**
+   * @param $name string
+   */
+  public function line($name, $size = '', $description = '') {
+    throw new Exception( 'Not implemented' );
+  }
+
+
+  /**
+   * Ends the output.
+   */
+  public function end() {
+    throw new Exception( 'Not implemented' );
+  }
+
+
+} // class RESTDirectory
+
+
+/**
+ * Displays content in plain text format (tab delimited)
+ */
+class RESTDirectoryPlain extends RESTDirectory {
+
+
+  /**
+   * @param $name string
+   * @return string
+   */
+  public function line($name, $size = '', $description = '') {
+    echo "{$name}\t{$size}\n";
+  }
+
+
+  /**
+   * Ends the output.
+   * @return string
+   */
+  public function end() {
+    echo '';
+  }
+
+
+} // class RESTDirectoryPlain
+
+
+/**
+ * Displays content in plain text format (tab delimited)
+ */
+class RESTDirectoryCSV extends RESTDirectory {
+
+  private function start() {
+    echo "Name,Size,Description\r\n";
+    $this->header_sent = true;
+  }
+
+  /**
+   * @param $name string
+   */
+  public function line($name, $size = '', $description = '') {
+    if (!$this->header_sent) {
+      $this->start();
+    }
+    $name = str_replace('"', '""', $name);
+    $size = str_replace('"', '""', $size);
+    $description = str_replace('"', '""', $description);
+    echo "\"{$name}\",\"{$size}\",\"{$description}\"\r\n";
+  }
+
+
+  /**
+   * Ends the output.
+   * @return string
+   */
+  public function end() {
+    if (!$this->header_sent) {
+      $this->start();
+    }
+    echo '';
+  }
+
+
+} // class RESTDirectoryCSV
+
+
+/**
+ * Displays content in plain text format (tab delimited)
+ */
+class RESTDirectoryHTML extends RESTDirectory {
+
+
+  private function start() {
+    call_user_func(self::$html_start);
+    echo <<<EOS
+<h1>Contents</h1>
+<table class="toc" id="directory_index"><tbody>
+<tr><th class="name">Name</th><th class="size">Size</th><th class="description">Description</th></tr>
+EOS;
+    $this->header_sent = true;
+  }
+
+  /**
+   * @param $name string
+   * @return string
+   */
+  public function line($name, $size = '', $description = '') {
+    if (!$this->header_sent) {
+      $this->start();
+    }
+    $is_dir = substr($name, -1) === '/';
+    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) .
+      '"><td class="name"><a rel="child" href="' . REST::urlencode($name) .
+      '">' . htmlentities($name) . "</a></td>
+      <td class=\"size\">{$size}</td><td class=\"description\">{$description}</td></tr>\n";
+  }
+
+
+  /**
+   * Ends the output.
+   * @return string
+   */
+  public function end() {
+    if (!$this->header_sent) {
+      $this->start();
+    }
+    echo "</tbody></table>";
+    call_user_func(self::$html_end);
+  }
+
+
+  private static $html_start = array('RESTDirectoryHTML', 'html_start');
+  private static $html_end   = array('RESTDirectoryHTML', 'html_end'  );
+
+  
+  public static function setHTML($html_start, $html_end) {
+    self::$html_start = $html_start;
+    self::$html_end   = $html_end;
+  }
+  
+  
+  public static function html_start() {
+    echo REST::xml_header();
+    $indexURL = dirname($_SERVER['REQUEST_URI']);
+    if ($indexURL != '/') $indexURL .= '/';
+  ?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
+<head>
+  <link rel="index" rev="child" type="application/xhtml+xml" href="<?php echo $indexURL; ?>" />
+  <link rel="stylesheet" type="text/css" href="/style.css" />
+  <title>Directory index</title>
+</head><body>
+<p id="p_index"><a id="a_index" rel="index" rev="child" href="<?php echo $indexURL; ?>">Index</a></p><?php
+  }
+  
+  
+  /**
+   * Outputs HTML end-tags
+   */
+  public static function html_end() {
+    echo '</body></html>';
+  }
+
+  
+} // class RESTDirectoryHTML
+
+
+/**
+ * Displays content in plain text format (tab delimited)
+ * TODO: Should support streaming
+ */
+class RESTDirectoryJSON extends RESTDirectory {
+
+
+  /**
+   * Contains a structure...
+   */
+  private $dir = null;
+
+  private function start() {
+    $this->dir = array(
+      'header' => array('filename', 'size', 'description'),
+      'lines'  => array(),
+    );
+  }
+
+  public function line($name, $size = '', $description = '') {
+    if (empty($this->dir))
+      $this->start();
+    $this->dir['lines'][] = array($name, $size, $description);
+  }
+
+  public function end() {
+    if (empty($this->dir))
+      $this->start();
+    echo json_encode($this->dir);
+  }
+
+} // class RESTDirectoryJSON
 
