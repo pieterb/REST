@@ -4,27 +4,7 @@
  * Copyright © 2008 by Pieter van Beek <pieterb@sara.nl>                  *
  **************************************************************************/
 
-###########################
-# HANDLE METHOD SPOOFING: #
-###########################
-if ($_SERVER['REQUEST_METHOD'] == 'POST' and
-    isset($_GET['http_method'])) {
-  $http_method = strtoupper( $_GET['http_method'] );
-  unset( $_GET['http_method'] );
-  if ($http_method === 'GET' &&
-      @$_SERVER['CONTENT_TYPE'] === 'application/x-www-form-urlencoded') {
-    $_GET = $_POST;
-    $_POST = array();
-  }
-  $_SERVER['QUERY_STRING'] = http_build_query($_GET);
-  $_SERVER['REQUEST_URI'] =
-    substr( $_SERVER['REQUEST_URI'], 0,
-            strpos( $_SERVER['REQUEST_URI'], '?' ) );
-  if ($_SERVER['QUERY_STRING'] != '')
-    $_SERVER['REQUEST_URI'] .= '?' . $_SERVER['QUERY_STRING'];
-  $_SERVER['REQUEST_METHOD'] = $http_method;
-}
-
+REST::handle_method_spoofing();
 
 ##############
 # CLASS REST #
@@ -35,6 +15,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' and
 class REST {
 
 
+  public static function handle_method_spoofing() {
+    if ($_SERVER['REQUEST_METHOD'] == 'POST' and
+        isset($_GET['http_method'])) {
+      $http_method = strtoupper( $_GET['http_method'] );
+      unset( $_GET['http_method'] );
+      if ( $http_method === 'GET' &&
+           strstr( @$_SERVER['CONTENT_TYPE'],
+                   'application/x-www-form-urlencoded' ) !== false ) {
+        $_GET = $_POST;
+        $_POST = array();
+      }
+      elseif ( $http_method === 'PUT' &&
+               strstr( @$_SERVER['CONTENT_TYPE'],
+                       'application/x-www-form-urlencoded' ) !== false &&
+               isset($_POST['entity'])) {
+        self::$inputhandle = tmpfile();
+        fwrite( self::$inputhandle, $_POST['entity'] );
+        fseek(self::$inputhandle, 0);
+        $_SERVER['CONTENT_LENGTH'] = strlen($_POST['entity']);
+        unset($_POST['entity']);
+        if (isset($_POST['content-type'])) {
+          $_SERVER['CONTENT_TYPE'] = $_POST['content-type'];
+          unset($_POST['content-type']);
+        } else
+          $_SERVER['CONTENT_TYPE'] = 'application/octet-stream';
+      }
+      elseif ( $http_method === 'PUT' &&
+               strstr( @$_SERVER['CONTENT_TYPE'],
+                       'multipart/form-data' ) !== false &&
+               @$_FILES['entity']['error'] === UPLOAD_ERR_OK ) {
+        self::$inputhandle = fopen($_FILES['entity']['tmp_name'], 'r');
+        $_SERVER['CONTENT_LENGTH'] = $_FILES['entity']['size'];
+        $_SERVER['CONTENT_TYPE']   = $_FILES['entity']['type'];
+      }
+      $_SERVER['QUERY_STRING'] = http_build_query($_GET);
+      $_SERVER['REQUEST_URI'] =
+        substr( $_SERVER['REQUEST_URI'], 0,
+                strpos( $_SERVER['REQUEST_URI'], '?' ) );
+      if ($_SERVER['QUERY_STRING'] != '')
+        $_SERVER['REQUEST_URI'] .= '?' . $_SERVER['QUERY_STRING'];
+      $_SERVER['REQUEST_METHOD'] = $http_method;
+    }
+  }
+  
+  
   /**
    * Require certain HTTP method(s).
    * This method takes a variable number of arguments.
@@ -60,22 +85,20 @@ class REST {
    */
   public static function inputhandle() {
     if (self::$inputhandle === null) {
-      self::$inputhandle = tmpfile();
-      $input = fopen('php://input', 'r');
       if ( isset( $_SERVER['CONTENT_LENGTH'] ) ) {
-        $contentlength = $_SERVER['CONTENT_LENGTH'];
-        while ( !feof($input) && $contentlength ) {
-          $block = fread( $input, $contentlength );
-          $contentlength -= strlen( $block );
-          fwrite( self::$inputhandle, $block );
-        }
+        self::$inputhandle = fopen('php://input', 'r');
       }
       elseif ( $_SERVER['HTTP_TRANSFER_ENCODING'] == 'chunked' ) {
+        self::$inputhandle = tmpfile();
+        $input = fopen('php://input', 'r');
         while ( !feof($input) )
           fwrite( self::$inputhandle, fgetc( $input ) );
+        fclose( $input );
+        fseek(self::$inputhandle, 0);
       }
-      fclose( $input );
-      fseek(self::$inputhandle, 0);
+      else {
+        self::fatal(self::HTTP_LENGTH_REQUIRED);
+      }
     }
     return self::$inputhandle;
   }
@@ -286,9 +309,7 @@ class REST {
    * @param $message string The message in the content body
    * @return void
    */
-  public static function error($status, $message = '', $stylesheet = null) {
-    global $REST_STYLESHEET;
-    if ($stylesheet === null) $stylesheet = @$REST_STYLESHEET;
+  public static function error($status, $message = '') {
     self::header(array(
       'status'       => $status,
       'Content-Type' => self::best_xhtml_type() . '; charset=UTF-8'
@@ -299,22 +320,8 @@ class REST {
             var_export($_SERVER, true) );
     if (!preg_match('/^\\s*</s', $message))
     	$message = "<p id=\"message\">$message</p>";
-    if (!empty($stylesheet))
-      $stylesheet = '<link rel="stylesheet" type="text/css" href="' .
-        $stylesheet . '" />';
-    $status_code = self::status_code($status);
-    echo self::xml_header() . <<<EOS
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
-  <head>
-    <title>$status_code</title>$stylesheet
-  </head>
-  <body>
-    <h1 id="status_code">HTTP/1.1 $status_code</h1>
-    $message
-  </body>
-</html>
-EOS;
+    $status_code = "HTTP/1.1 " . self::status_code($status);
+    echo self::html_start($status_code) . $message . self::html_end();
   }
   
   
@@ -337,6 +344,48 @@ EOS;
     return "<?xml version=\"$version\" encoding=\"$encoding\"?>\n";
   }
   
+  
+  private static $html_start = null;
+  private static $html_end   = null;
+  public static function setHTML($html_start, $html_end) {
+    self::$html_start = $html_start;
+    self::$html_end   = $html_end;
+  }
+  
+  
+  public static $STYLESHEET = null;
+  public static function html_start($title) {
+    if (self::$html_start !== null)
+      return call_user_func(self::$html_start, $title);
+    $title = htmlspecialchars($title, ENT_COMPAT, "UTF-8");
+    $indexURL = REST::urlencode( dirname( $_SERVER['REQUEST_URI'] ) );
+    if ($indexURL != '/') $indexURL .= '/';
+    $stylesheet = self::$STYLESHEET ? self::$STYLESHEET : "{$indexURL}style.css"; 
+    return REST::xml_header() . <<<EOS
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
+<head>
+  <title>{$title}</title>
+  <link rel="stylesheet" type="text/css" href="{$stylesheet}" />
+  <link rel="index" rev="child" type="application/xhtml+xml" href="{$indexURL}"/>
+</head><body>
+<div id="div_header">
+<div id="div_index"><a rel="index" rev="child" href="{$indexURL}">index</a></div>
+<h1>{$title}</h1>
+</div>
+EOS;
+  }
+
+
+  /**
+   * Outputs HTML end-tags
+   */
+  public static function html_end() {
+    if (self::$html_end !== null)
+      return call_user_func(self::$html_end, $title);
+    return '</body></html>';
+  }
+
   
   public static function isValidURI($uri) {
     return preg_match('@^[a-z]+:(?:%[a-fA-F0-9]{2}|[-\\w.~:/?#\\[\\]\\@!$&\'()*+,;=]+)+$@', $uri);
@@ -487,11 +536,16 @@ EOS;
  */
 class RESTDirectory {
 
-
   /**
-   * @var string
+   * @var string plain text
    */
-  protected $html_form = "";
+  protected static $title;
+
+  
+  /**
+   * @var string html
+   */
+  protected $html_form;
 
 
   /**
@@ -503,15 +557,19 @@ class RESTDirectory {
   /**
    * Abstract class has protected ctor;
    */
-  protected function __construct($form) {
+  protected function __construct($title, $form) {
+    $this->title     = $title;
     $this->html_form = $form;
   }
 
 
   /**
+   * @param $title string plain text
    * @return object RESTDirectory
    */
-  public static function factory() {
+  public static function factory( $title = null, $html_form = '' ) {
+    if ($title === null)
+      $title = "Index for {$_SERVER['REQUEST_URI']}";
     $best_xhtml_type = REST::best_xhtml_type();
     $type = REST::best_content_type(
     array(
@@ -525,17 +583,12 @@ class RESTDirectory {
     REST::header("{$type}; charset=UTF-8");
     switch ($type) {
       case 'application/xhtml+xml':
-      case 'text/html'            : return new RESTDirectoryHTML();
+      case 'text/html'            : return new RESTDirectoryHTML($title, $html_form);
       case 'text/tdv'             :
-      case 'text/plain'           : return new RESTDirectoryPlain();
-      case 'application/json'     : return new RESTDirectoryJSON();
-      case 'text/csv'             : return new RESTDirectoryCSV();
+      case 'text/plain'           : return new RESTDirectoryPlain($title, $html_form);
+      case 'application/json'     : return new RESTDirectoryJSON($title, $html_form);
+      case 'text/csv'             : return new RESTDirectoryCSV($title, $html_form);
     }
-  }
-
-  
-  public static function setHTML($html_start, $html_end) {
-    RESTDirectoryHTML::setHTML($html_start, $html_end);
   }
   
   
@@ -631,9 +684,8 @@ class RESTDirectoryHTML extends RESTDirectory {
 
 
   private function start() {
-    call_user_func(self::$html_start);
-    echo <<<EOS
-<h1>Contents</h1>
+    echo REST::html_start( $this->title ) . $this->html_form . <<<EOS
+<h2>Contents</h2>
 <table class="toc" id="directory_index"><tbody>
 <tr><th class="name">Name</th><th class="size">Size</th><th class="description">Description</th></tr>
 EOS;
@@ -665,43 +717,10 @@ EOS;
       $this->start();
     }
     echo "</tbody></table>";
-    call_user_func(self::$html_end);
+    echo REST::html_end();
   }
 
 
-  private static $html_start = array('RESTDirectoryHTML', 'html_start');
-  private static $html_end   = array('RESTDirectoryHTML', 'html_end'  );
-
-  
-  public static function setHTML($html_start, $html_end) {
-    self::$html_start = $html_start;
-    self::$html_end   = $html_end;
-  }
-  
-  
-  public static function html_start() {
-    echo REST::xml_header();
-    $indexURL = dirname($_SERVER['REQUEST_URI']);
-    if ($indexURL != '/') $indexURL .= '/';
-  ?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
-<head>
-  <link rel="index" rev="child" type="application/xhtml+xml" href="<?php echo $indexURL; ?>" />
-  <link rel="stylesheet" type="text/css" href="/style.css" />
-  <title>Directory index</title>
-</head><body>
-<p id="p_index"><a id="a_index" rel="index" rev="child" href="<?php echo $indexURL; ?>">Index</a></p><?php
-  }
-  
-  
-  /**
-   * Outputs HTML end-tags
-   */
-  public static function html_end() {
-    echo '</body></html>';
-  }
-
-  
 } // class RESTDirectoryHTML
 
 
