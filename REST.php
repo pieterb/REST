@@ -382,7 +382,7 @@ EOS;
    */
   public static function html_end() {
     if (self::$html_end !== null)
-      return call_user_func(self::$html_end, $title);
+      return call_user_func(self::$html_end);
     return '</body></html>';
   }
 
