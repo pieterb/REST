@@ -569,7 +569,7 @@ class RESTDirectory {
    */
   public static function factory( $title = null, $html_form = '' ) {
     if ($title === null)
-      $title = "Index for {$_SERVER['REQUEST_URI']}";
+      $title = 'Index for ' . htmlspecialchars(urldecode($_SERVER['REQUEST_URI']), ENT_COMPAT, 'UTF-8');
     $best_xhtml_type = REST::best_xhtml_type();
     $type = REST::best_content_type(
     array(
