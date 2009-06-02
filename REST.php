@@ -536,6 +536,15 @@ EOS;
  */
 class RESTDirectory {
 
+  
+  const PASS_NEVER = 0;
+  const PASS_DIR = 1;
+  const PASS_ALWAYS = 2;
+  
+  
+  public $query_pass = self::PASS_ALWAYS;
+  
+  
   /**
    * @var string plain text
    */
@@ -703,6 +712,7 @@ EOS;
     $is_dir = substr($name, -1) === '/';
     echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) .
       '"><td class="name"><a rel="child" href="' . REST::urlencode($name) .
+      (isset($_SERVER['QUERY_STRING']) ? "?{$_SERVER['QUERY_STRING']}" : '') .
       '">' . htmlentities($name) . "</a></td>
       <td class=\"size\">{$size}</td><td class=\"description\">{$description}</td></tr>\n";
   }
