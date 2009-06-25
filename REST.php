@@ -4,7 +4,8 @@
  * Copyright © 2008 by Pieter van Beek <pieterb@sara.nl>                  *
  **************************************************************************/
 
-REST::handle_method_spoofing();
+//REST::handle_method_spoofing();
+//REST::setHTML('html_start', 'html_end');
 
 ##############
 # CLASS REST #
@@ -279,7 +280,7 @@ class REST {
       if ( $ord >= ord('a') && $ord <= ord('z') ||
            $ord >= ord('A') && $ord <= ord('Z') ||
            $ord >= ord('0') && $ord <= ord('9') ||
-           strpos( '/-_.!~*\'()', $url[$i] ) !== false )
+           strpos( '/-_.~', $url[$i] ) !== false )
            // Strictly spoken, the tilde ~ should be encoded as well, but I
            // don't do that. This makes sure URL's like http://some.com/~user/
            // don't get mangled, at the risk of problems during transport.
@@ -319,8 +320,8 @@ class REST {
             "$message\n\n" . var_export(debug_backtrace(), true) . "\n\n" .
             var_export($_SERVER, true) );
     if (!preg_match('/^\\s*</s', $message))
-    	$message = "<p id=\"message\">$message</p>";
-    $status_code = "HTTP/1.1 " . self::status_code($status);
+      $message = '<pre id="message">' . htmlspecialchars( $message, ENT_COMPAT, 'UTF-8' ) . '</pre>';
+            $status_code = "HTTP/1.1 " . self::status_code($status);
     echo self::html_start($status_code) . $message . self::html_end();
   }
   
@@ -333,6 +334,46 @@ class REST {
     $args = func_get_args();
     call_user_func_array( array('REST', 'error'), $args );
     exit;
+  }
+  
+  
+  public static function redirect($status, $url) {
+    $xhtml = self::best_xhtml_type();
+    $bct = self::best_content_type(
+      array(
+        $xhtml => 1.0,
+        'text/plain'
+      ), $xhtml
+    );
+    $header = array(
+      'status' => $status,
+      'Content-Type' => $bct
+    );
+    if (is_string($url))
+      $header['Location'] = self::rel2url($url);
+    self::header($header);
+    if ($bct == 'text/plain') {
+      if (is_array($url)) foreach($url as $value) echo "$value\n";
+      else echo "$url";
+    } else {
+      self::html_start('HTTP/1.1 ' . self::status_code($status));
+      if (is_array($url)) {
+        echo '<ul>';
+        foreach($url as $value)
+          echo "<li><a href=\"$value\">$value</a></li>\n";
+        echo '</ul>';
+      }
+      else {
+        echo "<a href=\"$value\">$value</a>";
+      }
+      self::html_end();
+    }
+    exit;
+  }
+  
+  
+  public static function created($url) {
+    return self::redirect(self::HTTP_CREATED, $url);
   }
   
   
@@ -354,24 +395,27 @@ class REST {
   
   
   public static $STYLESHEET = null;
+  /**
+   * @param $title string Title in UTF-8
+   */
   public static function html_start($title) {
     if (self::$html_start !== null)
       return call_user_func(self::$html_start, $title);
-    $title = htmlspecialchars($title, ENT_COMPAT, "UTF-8");
-    $indexURL = REST::urlencode( dirname( $_SERVER['REQUEST_URI'] ) );
-    if ($indexURL != '/') $indexURL .= '/';
-    $stylesheet = self::$STYLESHEET ? self::$STYLESHEET : "{$indexURL}style.css"; 
+    $t_title = htmlspecialchars($title, ENT_COMPAT, "UTF-8");
+    $t_index = REST::urlencode( dirname( $_SERVER['REQUEST_URI'] ) );
+    if ($t_index != '/') $t_index .= '/';
+    $t_stylesheet = self::$STYLESHEET ? self::$STYLESHEET : "{$t_index}style.css";
     return REST::xml_header() . <<<EOS
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-us">
 <head>
-  <title>{$title}</title>
-  <link rel="stylesheet" type="text/css" href="{$stylesheet}" />
-  <link rel="index" rev="child" type="application/xhtml+xml" href="{$indexURL}"/>
+  <title>{$t_title}</title>
+  <link rel="stylesheet" type="text/css" href="{$t_stylesheet}" />
+  <link rel="index" rev="child" type="application/xhtml+xml" href="{$t_index}"/>
 </head><body>
 <div id="div_header">
-<div id="div_index"><a rel="index" rev="child" href="{$indexURL}">index</a></div>
-<h1>{$title}</h1>
+<div id="div_index"><a rel="index" rev="child" href="{$t_index}">index</a></div>
+<h1>{$t_title}</h1>
 </div>
 EOS;
   }
@@ -537,18 +581,10 @@ EOS;
 class RESTDirectory {
 
   
-  const PASS_NEVER = 0;
-  const PASS_DIR = 1;
-  const PASS_ALWAYS = 2;
-  
-  
-  public $query_pass = self::PASS_ALWAYS;
-  
-  
   /**
    * @var string plain text
    */
-  protected static $title;
+  protected $title;
 
   
   /**
@@ -602,7 +638,9 @@ class RESTDirectory {
   
   
   /**
-   * @param $name string
+   * @param $name string URL-encoded name
+   * @param $size string
+   * @param $description string HTML
    */
   public function line($name, $size = '', $description = '') {
     throw new Exception( 'Not implemented' );
@@ -664,10 +702,10 @@ class RESTDirectoryCSV extends RESTDirectory {
     if (!$this->header_sent) {
       $this->start();
     }
-    $name = str_replace('"', '""', $name);
-    $size = str_replace('"', '""', $size);
+    $escsize = str_replace('"', '""', $size);
+    if ($escsize != $size) $escsize = "\"$escsize\"";
     $description = str_replace('"', '""', $description);
-    echo "\"{$name}\",\"{$size}\",\"{$description}\"\r\n";
+    echo "{$name},{$escsize},\"{$description}\"\r\n";
   }
 
 
@@ -709,12 +747,17 @@ EOS;
     if (!$this->header_sent) {
       $this->start();
     }
-    $is_dir = substr($name, -1) === '/';
-    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) .
-      '"><td class="name"><a rel="child" href="' . REST::urlencode($name) .
-      (isset($_SERVER['QUERY_STRING']) ? "?{$_SERVER['QUERY_STRING']}" : '') .
-      '">' . htmlentities($name) . "</a></td>
-      <td class=\"size\">{$size}</td><td class=\"description\">{$description}</td></tr>\n";
+    $expname = explode('?', $name, 2);
+    $escname = htmlspecialchars(urldecode($expname[0]), ENT_COMPAT, 'UTF-8');
+    $escsize = htmlspecialchars($size, ENT_COMPAT, 'UTF-8');
+    $is_dir = substr($name[0], -1) === '/';
+    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) . '">';
+    echo <<<EOS
+<td class="name"><a rel="child" href="{$name}">{$escname}</a></td>
+<td class="size">{$escsize}</td>
+<td class="description">{$description}</td>
+</tr>
+EOS;
   }
 
 
@@ -766,4 +809,3 @@ class RESTDirectoryJSON extends RESTDirectory {
   }
 
 } // class RESTDirectoryJSON
-
