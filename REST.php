@@ -337,6 +337,13 @@ class REST {
   }
   
   
+  /**
+   * Redirects to a URL.
+   * @param $status
+   * @param $url string a URL string
+   * @internal in fact, this method is more generic than the name suggests.
+   * $url can also be an array of URL's. This feature is used by self::created().
+   */
   public static function redirect($status, $url) {
     $xhtml = self::best_xhtml_type();
     $bct = self::best_content_type(
@@ -364,7 +371,7 @@ class REST {
         echo '</ul>';
       }
       else {
-        echo "<a href=\"$value\">$value</a>";
+        echo "<a href=\"$url\">$url</a>";
       }
       self::html_end();
     }
