@@ -1,6 +1,4 @@
 <?php
-
-
 /*·************************************************************************
  * Copyright ©2007-2009 Pieter van Beek <http://pieterjavanbeek.hyves.nl/>
  *
@@ -17,18 +15,33 @@
  * $Id$
  **************************************************************************/
 
+/**
+ * This file contains all REST* classes.
+ * @package REST
+ */
 //REST::handle_method_spoofing();
 //REST::setHTML('html_start', 'html_end');
 
-##############
-# CLASS REST #
-##############
 /**
  * A singleton to REST-enable your scripts.
+ * @package REST
  */
 class REST {
 
 
+  /**
+   * Handles method spoofing.
+   * 
+   * Callers should use this method as one of the first methods in their
+   * scripts. This method does the following:
+   * - The <em>real</em> HTTP method must be POST.
+   * - Modify "environment variables" <code>$_SERVER['QUERY_STRING']</code>,
+   *   <code>$_SERVER['REQUEST_URI']</code>,
+   *   <code>$_SERVER['REQUEST_METHOD']</code>,
+   *   <code>$_SERVER['CONTENT_LENGTH']</code>,
+   *   <code>$_SERVER['CONTENT_TYPE']</code> as necessary.
+   * @return void
+   */
   public static function handle_method_spoofing() {
     if ($_SERVER['REQUEST_METHOD'] == 'POST' and
         isset($_GET['http_method'])) {
@@ -49,9 +62,9 @@ class REST {
         fseek(self::$inputhandle, 0);
         $_SERVER['CONTENT_LENGTH'] = strlen($_POST['entity']);
         unset($_POST['entity']);
-        if (isset($_POST['content-type'])) {
-          $_SERVER['CONTENT_TYPE'] = $_POST['content-type'];
-          unset($_POST['content-type']);
+        if (isset($_POST['http_content_type'])) {
+          $_SERVER['CONTENT_TYPE'] = $_POST['http_content_type'];
+          unset($_POST['http_content_type']);
         } else
           $_SERVER['CONTENT_TYPE'] = 'application/octet-stream';
       }
@@ -75,10 +88,24 @@ class REST {
   
   
   /**
+   * Handles header spoofing.
+   * 
+   * Callers should call {@link handle_method_spoofing()} <em>before</em>
+   * calling this method (if they want method spoofing, of course).
+   * @return void
+   * @internal not implemented
+   */
+  public static function handle_header_spoofing() {
+    throw new Exception('', self::HTTP_NOT_IMPLEMENTED);
+  }
+  
+  
+  /**
    * Require certain HTTP method(s).
+   * 
    * This method takes a variable number of arguments.
    *
-   * On failure, this method sends an HTTP/1.1 Method Not Allowed,
+   * On failure, this method sends an HTTP/1.1 405 Method Not Allowed,
    * and doesn't return!
    * @return void
    */
@@ -95,6 +122,10 @@ class REST {
    */
   private static $inputhandle = null;
   /**
+   * Wrapper around <code>fopen('php://input', 'r')</code>.
+   * 
+   * This wrapper is necessary to facilitate chunked transfer encoding and
+   * method spoofing (in case PUT requests).
    * @return resource filehandle
    */
   public static function inputhandle() {
@@ -131,17 +162,43 @@ class REST {
   
   /**
    * Check the If-Modified-Since request header.
-   * @param $timestamp int Unix timestamp of the last modification of the current
+   * @param int $timestamp Unix timestamp of the last modification of the current
    *        resource.
-   * @return bool TRUE if the current resource has been modified, otherwise FALSE.
+   * @param boolean $return true if this 
+   * @return boolean true if this resource has been modified, otherwise false.
+   * If parameter $return is false (which is the default), this method doesn't
+   * return if the resource isn't modified, but instead sends an 
+   * HTTP/1.1 304 Not Modified.
    */
-  public static function check_if_modified_since( $timestamp ) {
+  public static function check_if_modified_since( $timestamp, $return = false ) {
     if (empty($_SERVER['HTTP_IF_MODIFIED_SINCE']))
       return true;
-    return strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) < $timestamp;
+    $retval = strtotime($_SERVER['HTTP_IF_MODIFIED_SINCE']) < $timestamp;
+    if (!$retval && !$return)
+      self::fatal(self::HTTP_NOT_MODIFIED);
+    return $retval;
   }
   
   
+  /**
+   * Compares two ETag values.
+   * @param string $a
+   * @param string $b
+   * @return bool true if equal, otherwise false
+   * @throws Exception if both tags are malformed.
+   */
+  public static function equalETags( $a, $b ) {
+    if ( !preg_match( '@^\\s*(?:W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
+                      $a, $a_matches ) &&
+         !preg_match( '@^\\s*(?:W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
+                      $b, $b_matches ) )
+      throw new Exception("Comparing null ETags: $a $b");
+    return ( isset( $a_matches[1] ) &&
+             isset( $b_matches[1] ) &&
+             $a_matches[1] === $b_matches[1] );
+  }
+
+
   /**
    * Parsed version of $_SERVER['HTTP_ACCEPT'].
    * @var array
@@ -171,6 +228,7 @@ class REST {
     return self::$HTTP_ACCEPT;
   }
   
+  
   /**
    * Computes the best Content-Type, based on client and server preferences.
    * In parameter <var>$mime_types</var>, the server can specify a list of
@@ -185,7 +243,7 @@ class REST {
    * <code>array('text/plain' => 0.8, 'text/html' => '1.0')</code>
    * @param $fallback string|null The mime-type to use if we can't agree on
    *                  a mime-type supported by both client and server.
-   * @return string Please note that if <var>$fallback<var> isn't set, this
+   * @return string Please note that if <var>$fallback</var> isn't set, this
    *         method might not return at all.
    */
   public static function best_content_type($mime_types, $fallback = null) {
@@ -406,8 +464,25 @@ class REST {
   }
   
   
+  /**
+   * @var callback
+   */
   private static $html_start = null;
+  /**
+   * @var callback
+   */
   private static $html_end   = null;
+  /**
+   * Injects your own HTML generation functions instead of the default ones.
+   * 
+   * Both parameters must be of PHP's pseudo type "callback". See PHP's
+   * documentation for details.
+   * 
+   * @param $html_start callback Must point to a method with the same signature
+   *        as self::html_start().
+   * @param $html_end callback Must point to a method with the same signature
+   *        os self::html_end().
+   */
   public static function setHTML($html_start, $html_end) {
     self::$html_start = $html_start;
     self::$html_end   = $html_end;
@@ -417,11 +492,13 @@ class REST {
   public static $STYLESHEET = null;
   /**
    * @param $title string Title in UTF-8
+   * @return string a piece of UTF-8 encoded XHTML, including XML and DOCTYPE
+   * headers.
    */
   public static function html_start($title) {
     if (self::$html_start !== null)
       return call_user_func(self::$html_start, $title);
-    $t_title = htmlspecialchars($title, ENT_COMPAT, "UTF-8");
+    $t_title = htmlspecialchars($title, ENT_COMPAT, 'UTF-8');
     $t_index = REST::urlencode( dirname( $_SERVER['REQUEST_URI'] ) );
     if ($t_index != '/') $t_index .= '/';
     $t_stylesheet = self::$STYLESHEET ? self::$STYLESHEET : "{$t_index}style.css";
@@ -435,14 +512,15 @@ class REST {
 </head><body>
 <div id="div_header">
 <div id="div_index"><a rel="index" rev="child" href="{$t_index}">index</a></div>
-<h1>{$t_title}</h1>
+<h1 id="h1_title">{$t_title}</h1>
 </div>
 EOS;
   }
 
 
   /**
-   * Outputs HTML end-tags
+   * Outputs HTML end-tags.
+   * @return string a piece of UTF-8 encoded XHTML.
    */
   public static function html_end() {
     if (self::$html_end !== null)
@@ -451,13 +529,17 @@ EOS;
   }
 
   
+  /**
+   * @param $uri string
+   * @return boolean
+   */
   public static function isValidURI($uri) {
     return preg_match('@^[a-z]+:(?:%[a-fA-F0-9]{2}|[-\\w.~:/?#\\[\\]\\@!$&\'()*+,;=]+)+$@', $uri);
   }
   
   
   /**
-   * An xsl parser directive header
+   * An xsl parser directive header.
    * @param $url string URL of the stylesheet.
    * @return string An xsl parser directive, pointing at <code>$url</code>
    */
@@ -597,6 +679,7 @@ EOS;
 
 /**
  * Renders directory content in various formats.
+ * @package REST
  */
 class RESTDirectory {
 
@@ -680,6 +763,7 @@ class RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @package REST
  */
 class RESTDirectoryPlain extends RESTDirectory {
 
@@ -707,6 +791,7 @@ class RESTDirectoryPlain extends RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @package REST
  */
 class RESTDirectoryCSV extends RESTDirectory {
 
@@ -746,6 +831,7 @@ class RESTDirectoryCSV extends RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @package REST
  */
 class RESTDirectoryHTML extends RESTDirectory {
 
@@ -799,7 +885,8 @@ EOS;
 
 /**
  * Displays content in plain text format (tab delimited)
- * TODO: Should support streaming
+ * @package REST
+ * @todo Should support streaming
  */
 class RESTDirectoryJSON extends RESTDirectory {
 
