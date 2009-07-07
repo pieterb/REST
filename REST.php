@@ -17,10 +17,12 @@
 
 /**
  * This file contains all REST* classes.
+ * After inclusion of this file, clients might want to call the following
+ * methods:
+ * <code>REST::handle_method_spoofing();
+ * REST::setHTML('html_start', 'html_end');</code>
  * @package REST
  */
-//REST::handle_method_spoofing();
-//REST::setHTML('html_start', 'html_end');
 
 /**
  * A singleton to REST-enable your scripts.
@@ -300,17 +302,20 @@ class REST {
   public static function header($properties) {
     if (is_string($properties))
       $properties = array( 'Content-Type' => $properties );
+    $status = null;
     if (isset($properties['status'])) {
-      header(
-        $_SERVER['SERVER_PROTOCOL'] . ' ' .
-        self::status_code($properties['status'])
-      );
+      $status = $properties['status'];
       unset( $properties['status'] );
     }
     if (isset($properties['Location']))
       $properties['Location'] = self::rel2url($properties['Location']);
     foreach($properties as $key => $value)
       header("$key: $value");
+    if ($status !== null)
+      header(
+        $_SERVER['SERVER_PROTOCOL'] . ' ' .
+        self::status_code($status)
+      );
   }
   
   
@@ -410,8 +415,8 @@ class REST {
   
   /**
    * Redirects to a URL.
-   * @param $status
-   * @param $url string a URL string
+   * @param int $status
+   * @param string $url a URL
    * @internal in fact, this method is more generic than the name suggests.
    * $url can also be an array of URL's. This feature is used by self::created().
    */
@@ -420,7 +425,7 @@ class REST {
     $bct = self::best_content_type(
       array(
         $xhtml => 1.0,
-        'text/plain'
+        'text/plain' => 1.0
       ), $xhtml
     );
     $header = array(
@@ -450,6 +455,10 @@ class REST {
   }
   
   
+  /**
+   * Sends a proper HTTP/1.1 Created page.
+   * @param string $url a URL or an array of URL's. 
+   */
   public static function created($url) {
     return self::redirect(self::HTTP_CREATED, $url);
   }
@@ -676,243 +685,5 @@ EOS;
 
 } // class REST
 
-
-/**
- * Renders directory content in various formats.
- * @package REST
- */
-class RESTDirectory {
-
-  
-  /**
-   * @var string plain text
-   */
-  protected $title;
-
-  
-  /**
-   * @var string html
-   */
-  protected $html_form;
-
-
-  /**
-   * @var bool
-   */
-  protected $header_sent = false;
-
-  
-  /**
-   * Abstract class has protected ctor;
-   */
-  protected function __construct($title, $form) {
-    $this->title     = $title;
-    $this->html_form = $form;
-  }
-
-
-  /**
-   * @param $title string plain text
-   * @return object RESTDirectory
-   */
-  public static function factory( $title = null, $html_form = '' ) {
-    if ($title === null)
-      $title = 'Index for ' . htmlspecialchars(urldecode($_SERVER['REQUEST_URI']), ENT_COMPAT, 'UTF-8');
-    $best_xhtml_type = REST::best_xhtml_type();
-    $type = REST::best_content_type(
-    array(
-    $best_xhtml_type => 1.0,
-        'text/plain' => 0.3,
-        'text/tdv' => 0.5,
-        'text/csv' => 0.8,
-        'application/json' => 1.0,
-    ), $best_xhtml_type
-    );
-    REST::header("{$type}; charset=UTF-8");
-    switch ($type) {
-      case 'application/xhtml+xml':
-      case 'text/html'            : return new RESTDirectoryHTML($title, $html_form);
-      case 'text/tdv'             :
-      case 'text/plain'           : return new RESTDirectoryPlain($title, $html_form);
-      case 'application/json'     : return new RESTDirectoryJSON($title, $html_form);
-      case 'text/csv'             : return new RESTDirectoryCSV($title, $html_form);
-    }
-  }
-  
-  
-  /**
-   * @param $name string URL-encoded name
-   * @param $size string
-   * @param $description string HTML
-   */
-  public function line($name, $size = '', $description = '') {
-    throw new Exception( 'Not implemented' );
-  }
-
-
-  /**
-   * Ends the output.
-   */
-  public function end() {
-    throw new Exception( 'Not implemented' );
-  }
-
-
-} // class RESTDirectory
-
-
-/**
- * Displays content in plain text format (tab delimited)
- * @package REST
- */
-class RESTDirectoryPlain extends RESTDirectory {
-
-
-  /**
-   * @param $name string
-   * @return string
-   */
-  public function line($name, $size = '', $description = '') {
-    echo "{$name}\t{$size}\n";
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    echo '';
-  }
-
-
-} // class RESTDirectoryPlain
-
-
-/**
- * Displays content in plain text format (tab delimited)
- * @package REST
- */
-class RESTDirectoryCSV extends RESTDirectory {
-
-  private function start() {
-    echo "Name,Size,Description\r\n";
-    $this->header_sent = true;
-  }
-
-  /**
-   * @param $name string
-   */
-  public function line($name, $size = '', $description = '') {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    $escsize = str_replace('"', '""', $size);
-    if ($escsize != $size) $escsize = "\"$escsize\"";
-    $description = str_replace('"', '""', $description);
-    echo "{$name},{$escsize},\"{$description}\"\r\n";
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    echo '';
-  }
-
-
-} // class RESTDirectoryCSV
-
-
-/**
- * Displays content in plain text format (tab delimited)
- * @package REST
- */
-class RESTDirectoryHTML extends RESTDirectory {
-
-
-  private function start() {
-    echo REST::html_start( $this->title ) . $this->html_form . <<<EOS
-<h2>Contents</h2>
-<table class="toc" id="directory_index"><tbody>
-<tr><th class="name">Name</th><th class="size">Size</th><th class="description">Description</th></tr>
-EOS;
-    $this->header_sent = true;
-  }
-
-  /**
-   * @param $name string
-   * @return string
-   */
-  public function line($name, $size = '', $description = '') {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    $expname = explode('?', $name, 2);
-    $escname = htmlspecialchars(urldecode($expname[0]), ENT_COMPAT, 'UTF-8');
-    $escsize = htmlspecialchars($size, ENT_COMPAT, 'UTF-8');
-    $is_dir = substr($name[0], -1) === '/';
-    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) . '">';
-    echo <<<EOS
-<td class="name"><a rel="child" href="{$name}">{$escname}</a></td>
-<td class="size">{$escsize}</td>
-<td class="description">{$description}</td>
-</tr>
-EOS;
-  }
-
-
-  /**
-   * Ends the output.
-   * @return string
-   */
-  public function end() {
-    if (!$this->header_sent) {
-      $this->start();
-    }
-    echo "</tbody></table>";
-    echo REST::html_end();
-  }
-
-
-} // class RESTDirectoryHTML
-
-
-/**
- * Displays content in plain text format (tab delimited)
- * @package REST
- * @todo Should support streaming
- */
-class RESTDirectoryJSON extends RESTDirectory {
-
-
-  /**
-   * Contains a structure...
-   */
-  private $dir = null;
-
-  private function start() {
-    $this->dir = array(
-      'header' => array('filename', 'size', 'description'),
-      'lines'  => array(),
-    );
-  }
-
-  public function line($name, $size = '', $description = '') {
-    if (empty($this->dir))
-      $this->start();
-    $this->dir['lines'][] = array($name, $size, $description);
-  }
-
-  public function end() {
-    if (empty($this->dir))
-      $this->start();
-    echo json_encode($this->dir);
-  }
-
-} // class RESTDirectoryJSON
+require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDirectory.php';
+require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDir.php';
