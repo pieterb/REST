@@ -37,11 +37,11 @@ class REST {
    * Callers should use this method as one of the first methods in their
    * scripts. This method does the following:
    * - The <em>real</em> HTTP method must be POST.
-   * - Modify "environment variables" <code>$_SERVER['QUERY_STRING']</code>,
-   *   <code>$_SERVER['REQUEST_URI']</code>,
-   *   <code>$_SERVER['REQUEST_METHOD']</code>,
-   *   <code>$_SERVER['CONTENT_LENGTH']</code>,
-   *   <code>$_SERVER['CONTENT_TYPE']</code> as necessary.
+   * - Modify "environment variables" <var>$_SERVER['QUERY_STRING']</var>,
+   *   <var>$_SERVER['REQUEST_URI']</var>,
+   *   <var>$_SERVER['REQUEST_METHOD']</var>,
+   *   <var>$_SERVER['CONTENT_LENGTH']</var>,
+   *   <var>$_SERVER['CONTENT_TYPE']</var> as necessary.
    * @return void
    */
   public static function handle_method_spoofing() {
@@ -92,7 +92,7 @@ class REST {
   /**
    * Handles header spoofing.
    * 
-   * Callers should call {@link handle_method_spoofing()} <em>before</em>
+   * Callers should call {@link handle_method_spoofing()} <i>before</i>
    * calling this method (if they want method spoofing, of course).
    * @return void
    * @internal not implemented
@@ -124,7 +124,7 @@ class REST {
    */
   private static $inputhandle = null;
   /**
-   * Wrapper around <code>fopen('php://input', 'r')</code>.
+   * Wrapper around fopen('php://input', 'r').
    * 
    * This wrapper is necessary to facilitate chunked transfer encoding and
    * method spoofing (in case PUT requests).
