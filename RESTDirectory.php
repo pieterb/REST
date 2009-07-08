@@ -22,6 +22,7 @@
 
 /**
  * Renders directory content in various formats.
+ * @deprecated This class is deprecated in favor of class {@link RESTDir}.
  * @package REST
  */
 class RESTDirectory {
@@ -106,6 +107,7 @@ class RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @deprecated This class is deprecated in favor of class {@link RESTDirPlain}.
  * @package REST
  */
 class RESTDirectoryPlain extends RESTDirectory {
@@ -134,6 +136,7 @@ class RESTDirectoryPlain extends RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @deprecated This class is deprecated in favor of class {@link RESTDirCSV}.
  * @package REST
  */
 class RESTDirectoryCSV extends RESTDirectory {
@@ -174,6 +177,7 @@ class RESTDirectoryCSV extends RESTDirectory {
 
 /**
  * Displays content in plain text format (tab delimited)
+ * @deprecated This class is deprecated in favor of class {@link RESTDirHTML}.
  * @package REST
  */
 class RESTDirectoryHTML extends RESTDirectory {
@@ -230,6 +234,7 @@ EOS;
 /**
  * Displays content in plain text format (tab delimited)
  * @package REST
+ * @deprecated This class is deprecated in favor of class {@link RESTDirJSON}.
  * @todo Should support streaming
  */
 class RESTDirectoryJSON extends RESTDirectory {

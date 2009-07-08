@@ -536,6 +536,16 @@ EOS;
       return call_user_func(self::$html_end);
     return '</body></html>';
   }
+  
+  
+  /**
+   * Encodes plain UTF-8 into HTML text.
+   * @param string $string
+   * @return string HTML
+   */
+  public static function htmlspecialchars($string) {
+    return htmlspecialchars($string, ENT_QUOTES, 'UTF-8');
+  }
 
   
   /**

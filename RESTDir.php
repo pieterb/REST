@@ -115,7 +115,7 @@ class RESTDir {
    * @param $size string
    * @param $description string HTML
    */
-  public function line($name, $info) {
+  public function line($name, $info = array()) {
     throw new Exception( 'Not implemented' );
   }
 
