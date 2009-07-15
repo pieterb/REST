@@ -81,7 +81,7 @@ class RESTDir {
 
   /**
    * @param $title string plain text
-   * @return object RESTDir
+   * @return RESTDir
    */
   public static function factory( $title = null ) {
     if ($title === null) {
@@ -290,7 +290,9 @@ EOS;
         preg_replace('/[^\\w\\d]+/', '', $header)
       ) . '">';
       if (isset($info[$header]))
-        echo htmlspecialchars($info[$header], ENT_COMPAT, 'UTF-8');
+        echo ($header === 'HTML') ?
+          $info[$header] :
+          htmlspecialchars($info[$header], ENT_COMPAT, 'UTF-8');
       echo "</td>\n";
     }
     echo "</tr>\n";
