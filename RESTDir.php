@@ -142,7 +142,9 @@ class RESTDirPlain extends RESTDir {
     if ($this->headers === null) $this->headers = array();
     echo 'Name';
     foreach ($this->headers as $header)
-      echo "\t" . str_replace("\t", '\\t', $header);
+      echo "\t" . str_replace( array( "\\",   "\t",  "\r",  "\n" ),
+                               array( '\\\\', '\\t', '\\r', '\\n' ),
+                               $header);
     echo "\r\n";
     $this->header_sent = true;
   }
@@ -153,21 +155,19 @@ class RESTDirPlain extends RESTDir {
    * @return string
    */
   public function line($name, $info = array()) {
-    unset($info['HTML']);
     if (!$this->header_sent) {
-      if ($this->headers === null) {
+      if ($this->headers === null)
         $this->headers = array_keys($info);
-      }
       $this->start();
     }
-    echo str_replace( array( "\t", "\r", "\n" ),
-                      array( '\\t', '\\r', '\\n' ),
+    echo str_replace( array( "\\",   "\t",  "\r",  "\n" ),
+                      array( '\\\\', '\\t', '\\r', '\\n' ),
                       $name );
     foreach ($this->headers as $value)
       echo "\t" . (
         isset($info[$value])
-          ? str_replace( array( "\t", "\r", "\n" ),
-                         array( '\\t', '\\r', '\\n' ),
+          ? str_replace( array( "\\",   "\t",  "\r",  "\n" ),
+                         array( '\\\\', '\\t', '\\r', '\\n' ),
                          $info[$value] )
           : ''
       );
@@ -209,11 +209,9 @@ class RESTDirCSV extends RESTDir {
    * @return string
    */
   public function line($name, $info = array()) {
-    unset($info['HTML']);
     if (!$this->header_sent) {
-      if ($this->headers === null) {
+      if ($this->headers === null)
         $this->headers = array_keys($info);
-      }
       $this->start();
     }
     echo '"' . str_replace( '"', '""', $name );
@@ -253,9 +251,12 @@ class RESTDirHTML extends RESTDir {
 <table class="toc" id="directory_index"><tbody>
 <tr><th class="delete"></th><th class="name">Name</th>
 EOS;
-    foreach ($this->headers as $header)
+    foreach ($this->headers as $header) {
+      if ( strtolower( substr( $header, -4 ) ) == 'html' )
+        $header = substr( $header, 0, -4 );
       echo '<th class="' . preg_replace('/[^\\w\\d]+/', '', $header) .
         '">' . htmlspecialchars($header, ENT_QUOTES, 'UTF-8') . '</th>';
+    }
     echo "</tr>\n";
     $this->header_sent = true;
   }
@@ -289,10 +290,12 @@ EOS;
       echo '<td class="' . strtolower(
         preg_replace('/[^\\w\\d]+/', '', $header)
       ) . '">';
-      if (isset($info[$header]))
-        echo ($header === 'HTML') ?
-          $info[$header] :
-          htmlspecialchars($info[$header], ENT_COMPAT, 'UTF-8');
+      if (isset($info[$header])) {
+        $value = $info[$header];
+        if ( strtolower( substr( $header, -4 ) ) != 'html' )
+          $value = REST::htmlspecialchars($value);
+        echo $value;
+      }
       echo "</td>\n";
     }
     echo "</tr>\n";
