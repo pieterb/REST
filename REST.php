@@ -397,7 +397,7 @@ class REST {
             var_export($_SERVER, true) );
     if (!preg_match('/^\\s*</s', $message))
       $message = '<pre id="message">' . htmlspecialchars( $message, ENT_COMPAT, 'UTF-8' ) . '</pre>';
-            $status_code = "HTTP/1.1 " . self::status_code($status);
+    $status_code = "HTTP/1.1 " . self::status_code($status);
     echo self::html_start($status_code) . $message . self::html_end();
   }
   
@@ -439,7 +439,7 @@ class REST {
       if (is_array($url)) foreach($url as $value) echo "$value\n";
       else echo "$url";
     } else {
-      self::html_start('HTTP/1.1 ' . self::status_code($status));
+      echo self::html_start('HTTP/1.1 ' . self::status_code($status));
       if (is_array($url)) {
         echo '<ul>';
         foreach($url as $value)
@@ -449,7 +449,7 @@ class REST {
       else {
         echo "<a href=\"$url\">$url</a>";
       }
-      self::html_end();
+      echo self::html_end();
     }
     exit;
   }
