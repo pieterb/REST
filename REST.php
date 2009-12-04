@@ -11,12 +11,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * $Id$
  **************************************************************************/
 
 /**
- * This file contains all REST* classes.
+ * This is the primary include file for the REST PHP library.
  * After inclusion of this file, clients might want to call the following
  * methods:
  * <code>REST::handle_method_spoofing();
@@ -25,7 +23,7 @@
  */
 
 /**
- * A singleton to REST-enable your scripts.
+ * Namespace to REST-enable your scripts.
  * @package REST
  */
 class REST {

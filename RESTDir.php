@@ -11,8 +11,6 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- *
- * $Id$
  **************************************************************************/
 
 /**
@@ -26,13 +24,13 @@
  */
 class RESTDir {
 
-  
+
   /**
    * @var string plain text
    */
   protected $title;
 
-  
+
   /**
    * @var string html
    */
@@ -57,8 +55,8 @@ class RESTDir {
   protected function __construct($title) {
     $this->title     = $title;
   }
-  
-  
+
+
   /**
    * @param string $form HTML of the form
    * @return RESTDir $this
@@ -86,7 +84,7 @@ class RESTDir {
   public static function factory( $title = null ) {
     if ($title === null) {
       preg_match('@^(.*)/@', $_SERVER['REQUEST_URI'], $matches );
-      $title = 'Index for ' . htmlspecialchars( $matches[1] . '/', ENT_COMPAT, 'UTF-8');
+      $title = 'Index for ' . htmlspecialchars( $matches[1] . '/', ENT_QUOTES, 'UTF-8');
     }
     $best_xhtml_type = REST::best_xhtml_type();
     $type = REST::best_content_type(
@@ -108,8 +106,8 @@ class RESTDir {
       case 'text/csv'             : return new RESTDirCSV($title);
     }
   }
-  
-  
+
+
   /**
    * @param $name string URL-encoded name
    * @param $size string
@@ -262,10 +260,13 @@ EOS;
   }
 
   /**
-   * @param $name string
+   * @param $name string the relative URL of the resource. May include query params.
+   * @param $info array fieldname => value pairs with extra information about the resource.
+   * @param $delete bool indicates whether the resource supports the DELETE method. 
    * @return string
    */
-  public function line($name, $info = array()) {
+  public function line($name, $info = null, $delete = false) {
+    if (!is_array($info)) $info = array();
     if (!$this->header_sent) {
       if ($this->headers === null)
         $this->headers = array_keys($info);
@@ -273,18 +274,18 @@ EOS;
     }
     // ⌧ (the erase sign)
     $expname = explode('?', $name, 2);
-    $escname = htmlspecialchars(urldecode($expname[0]), ENT_COMPAT, 'UTF-8');
-    #$escsize = htmlspecialchars($size, ENT_COMPAT, 'UTF-8');
-    $is_dir = substr($name[0], -1) === '/';
-    echo '<tr class="' . ( $is_dir ? 'collection' : 'resource' ) . '">' .
-      '<td class="delete"><form action="' .
-      htmlspecialchars($name, ENT_QUOTES, 'UTF-8') .
+    $escname = htmlspecialchars(urldecode($expname[0]), ENT_QUOTES, 'UTF-8');
+    #$escsize = htmlspecialchars($size, ENT_QUOTES, 'UTF-8');
+    $is_coll = substr($expname[0], -1) === '/';
+    echo '<tr class="' . ( $is_coll ? 'collection' : 'resource' ) . '">' .
+      '<td class="delete">';
+    if ($delete)
+      echo '<form action="' . htmlspecialchars($name, ENT_QUOTES, 'UTF-8') .
       (strstr($name, '?') === false ? '?' : '&') .
-      'http_method=DELETE" method="post"><input type="submit" value="X" title="Delete ' .
-      htmlspecialchars(urldecode($expname[0]), ENT_QUOTES, 'UTF-8') .
-      '"/></form></td><td class="name"><a rel="child" href="' .
-      htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '">' .
-      htmlspecialchars(urldecode($expname[0]), ENT_COMPAT, 'UTF-8') .
+      'http_method=DELETE" method="post"><input type="submit" value="✘" title="Delete ' .
+      $escname . '"/></form>';
+    echo '</td><td class="name"><a rel="child" href="' .
+      htmlspecialchars($name, ENT_QUOTES, 'UTF-8') . '">' . $escname .
       '</a></td>';
     foreach ($this->headers as $header) {
       echo '<td class="' . strtolower(
