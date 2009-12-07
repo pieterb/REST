@@ -566,6 +566,26 @@ EOS;
   }
   
   
+  /**
+   * RFC4648 base64url encoder
+   * @param $string string the string to encode
+   * @return string
+   */
+  public static function base64url_encode($string) {
+    return tr(base64_encode($string), '+/', '-_');
+  }
+  
+  
+  /**
+   * RFC4648 base64url decoder
+   * @param $string string the base64url encoded string to decode
+   * @return string
+   */
+  public static function base64url_decode($string) {
+    return base64_decode(tr($string, '-_', '+/'));
+  }
+  
+  
   const HTTP_CONTINUE                        = 100;
   const HTTP_SWITCHING_PROTOCOLS             = 101;
   const HTTP_PROCESSING                      = 102;
