@@ -713,5 +713,5 @@ EOS;
 
 } // class REST
 
-require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDirectory.php';
+#require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDirectory.php';
 require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDir.php';
