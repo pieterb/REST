@@ -288,13 +288,13 @@ class REST {
    * <code>array( 'Content-Language' => 'en-us' )</code> If there's a
    * key «status» in the array, it is used for the 'HTTP/1.X ...'
    * status header, e.g.<code>array(
-   *   'status'       => 'CREATED',
+   *   'status'       => REST::HTTP_CREATED,
    *   'Content-Type' => 'text/plain'
    * )</code> If <var>$properties</var> is a string, it is taken as the
    * Content-Type, e.g.<code>$rest->header('text/plain')</code> is exactly
    * equivalent to
-   * <code>$rest->header(array('Content-Type' => 'text/plain'));</code>
-   * @return REST $this
+   * <code>$rest->header( array( 'Content-Type' => 'text/plain' ) );</code>
+   * @return void
    * @see status_code()
    */
   public static function header($properties) {
