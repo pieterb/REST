@@ -188,14 +188,15 @@ class REST {
    * @throws Exception if both tags are malformed.
    */
   public static function equalETags( $a, $b ) {
-    if ( !preg_match( '@^\\s*(?:W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
+    if ( !preg_match( '@^\\s*(W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
                       $a, $a_matches ) &&
-         !preg_match( '@^\\s*(?:W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
+         !preg_match( '@^\\s*(W/)?("(?:[^"\\\\]|\\\\.)*")\\s*@',
                       $b, $b_matches ) )
       throw new Exception("Comparing null ETags: $a $b");
     return ( isset( $a_matches[1] ) &&
              isset( $b_matches[1] ) &&
-             $a_matches[1] === $b_matches[1] );
+             $a_matches[1] === $b_matches[1] &&
+             $a_matches[2] === $b_matches[2] );
   }
 
 
@@ -279,9 +280,9 @@ class REST {
   }
   
   
-  ##########################
-  # HTTP header generation #
-  ##########################
+  ////////////////////////////
+  // HTTP header generation //
+  ////////////////////////////
   /**
    * Outputs HTTP/1.1 headers.
    * @param $properties array|string An array of headers to print, e.g.
@@ -588,23 +589,23 @@ EOS;
   
   const HTTP_CONTINUE                        = 100;
   const HTTP_SWITCHING_PROTOCOLS             = 101;
-  const HTTP_PROCESSING                      = 102;
+  const HTTP_PROCESSING                      = 102; // A WebDAV extension
   const HTTP_OK                              = 200;
   const HTTP_CREATED                         = 201;
   const HTTP_ACCEPTED                        = 202;
-  const HTTP_NON_AUTHORITATIVE_INFORMATION   = 203;
+  const HTTP_NON_AUTHORITATIVE_INFORMATION   = 203; // HTTP/1.1 only
   const HTTP_NO_CONTENT                      = 204;
   const HTTP_RESET_CONTENT                   = 205;
   const HTTP_PARTIAL_CONTENT                 = 206;
-  const HTTP_MULTI_STATUS                    = 207;
+  const HTTP_MULTI_STATUS                    = 207; // A WebDAV extension
   const HTTP_MULTIPLE_CHOICES                = 300;
   const HTTP_MOVED_PERMANENTLY               = 301;
   const HTTP_FOUND                           = 302;
-  const HTTP_SEE_OTHER                       = 303;
+  const HTTP_SEE_OTHER                       = 303; // HTTP/1.1 only
   const HTTP_NOT_MODIFIED                    = 304;
-  const HTTP_USE_PROXY                       = 305;
+  const HTTP_USE_PROXY                       = 305; // HTTP/1.1 only
   const HTTP_SWITCH_PROXY                    = 306;
-  const HTTP_TEMPORARY_REDIRECT              = 307;
+  const HTTP_TEMPORARY_REDIRECT              = 307; // HTTP/1.1 only
   const HTTP_BAD_REQUEST                     = 400;
   const HTTP_UNAUTHORIZED                    = 401;
   const HTTP_PAYMENT_REQUIRED                = 402;
@@ -623,22 +624,22 @@ EOS;
   const HTTP_UNSUPPORTED_MEDIA_TYPE          = 415;
   const HTTP_REQUESTED_RANGE_NOT_SATISFIABLE = 416;
   const HTTP_EXPECTATION_FAILED              = 417;
-  const HTTP_UNPROCESSABLE_ENTITY            = 422;
-  const HTTP_LOCKED                          = 423;
-  const HTTP_FAILED_DEPENDENCY               = 424;
-  const HTTP_UNORDERED_COLLECTION            = 425;
-  const HTTP_UPGRADE_REQUIRED                = 426;
-  const HTTP_RETRY_WITH                      = 449;
+  const HTTP_UNPROCESSABLE_ENTITY            = 422; // A WebDAV/RFC2518 extension
+  const HTTP_LOCKED                          = 423; // A WebDAV/RFC2518 extension
+  const HTTP_FAILED_DEPENDENCY               = 424; // A WebDAV/RFC2518 extension
+  const HTTP_UNORDERED_COLLECTION            = 425; // A WebDAV RFC 3648 extension (obsolete)
+  const HTTP_UPGRADE_REQUIRED                = 426; // an RFC2817 extension
+  const HTTP_RETRY_WITH                      = 449; // a Microsoft extension
   const HTTP_INTERNAL_SERVER_ERROR           = 500;
   const HTTP_NOT_IMPLEMENTED                 = 501;
   const HTTP_BAD_GATEWAY                     = 502;
   const HTTP_SERVICE_UNAVAILABLE             = 503;
   const HTTP_GATEWAY_TIMEOUT                 = 504;
   const HTTP_HTTP_VERSION_NOT_SUPPORTED      = 505;
-  const HTTP_VARIANT_ALSO_VARIES             = 506;
-  const HTTP_INSUFFICIENT_STORAGE            = 507;
+  const HTTP_VARIANT_ALSO_VARIES             = 506; // an RFC2295 extension
+  const HTTP_INSUFFICIENT_STORAGE            = 507; // A WebDAV extension
   const HTTP_BANDWIDTH_LIMIT_EXCEEDED        = 509;
-  const HTTP_NOT_EXTENDED                    = 510;
+  const HTTP_NOT_EXTENDED                    = 510; // an RFC2774 extension
   
   
   /**
@@ -648,23 +649,23 @@ EOS;
   private static $STATUS_CODES = array(
     self::HTTP_CONTINUE                        => '100 Continue',
     self::HTTP_SWITCHING_PROTOCOLS             => '101 Switching Protocols',
-    self::HTTP_PROCESSING                      => '102 Processing', # A WebDAV extension
+    self::HTTP_PROCESSING                      => '102 Processing', // A WebDAV extension
     self::HTTP_OK                              => '200 OK',
     self::HTTP_CREATED                         => '201 Created',
     self::HTTP_ACCEPTED                        => '202 Accepted',
-    self::HTTP_NON_AUTHORITATIVE_INFORMATION   => '203 Non-Authoritative Information', # HTTP/1.1 only
+    self::HTTP_NON_AUTHORITATIVE_INFORMATION   => '203 Non-Authoritative Information', // HTTP/1.1 only
     self::HTTP_NO_CONTENT                      => '204 No Content',
     self::HTTP_RESET_CONTENT                   => '205 Reset Content',
     self::HTTP_PARTIAL_CONTENT                 => '206 Partial Content',
-    self::HTTP_MULTI_STATUS                    => '207 Multi-Status', # A WebDAV extension
+    self::HTTP_MULTI_STATUS                    => '207 Multi-Status', // A WebDAV extension
     self::HTTP_MULTIPLE_CHOICES                => '300 Multiple Choices',
     self::HTTP_MOVED_PERMANENTLY               => '301 Moved Permanently',
     self::HTTP_FOUND                           => '302 Found',
-    self::HTTP_SEE_OTHER                       => '303 See Other', # HTTP/1.1 only
+    self::HTTP_SEE_OTHER                       => '303 See Other', // HTTP/1.1 only
     self::HTTP_NOT_MODIFIED                    => '304 Not Modified',
-    self::HTTP_USE_PROXY                       => '305 Use Proxy', # HTTP/1.1 only
+    self::HTTP_USE_PROXY                       => '305 Use Proxy', // HTTP/1.1 only
     self::HTTP_SWITCH_PROXY                    => '306 Switch Proxy',
-    self::HTTP_TEMPORARY_REDIRECT              => '307 Temporary Redirect', # HTTP/1.1 only
+    self::HTTP_TEMPORARY_REDIRECT              => '307 Temporary Redirect', // HTTP/1.1 only
     self::HTTP_BAD_REQUEST                     => '400 Bad Request',
     self::HTTP_UNAUTHORIZED                    => '401 Unauthorized',
     self::HTTP_PAYMENT_REQUIRED                => '402 Payment Required',
@@ -683,22 +684,22 @@ EOS;
     self::HTTP_UNSUPPORTED_MEDIA_TYPE          => '415 Unsupported Media Type',
     self::HTTP_REQUESTED_RANGE_NOT_SATISFIABLE => '416 Requested Range Not Satisfiable',
     self::HTTP_EXPECTATION_FAILED              => '417 Expectation Failed',
-    self::HTTP_UNPROCESSABLE_ENTITY            => '422 Unprocessable Entity', # A WebDAV/RFC2518 extension
-    self::HTTP_LOCKED                          => '423 Locked', # A WebDAV/RFC2518 extension
-    self::HTTP_FAILED_DEPENDENCY               => '424 Failed Dependency', # A WebDAV/RFC2518 extension
-    self::HTTP_UNORDERED_COLLECTION            => '425 Unordered Collection',
-    self::HTTP_UPGRADE_REQUIRED                => '426 Upgrade Required', # an RFC2817 extension
-    self::HTTP_RETRY_WITH                      => '449 Retry With', # a Microsoft extension
+    self::HTTP_UNPROCESSABLE_ENTITY            => '422 Unprocessable Entity', // A WebDAV/RFC2518 extension
+    self::HTTP_LOCKED                          => '423 Locked', // A WebDAV/RFC2518 extension
+    self::HTTP_FAILED_DEPENDENCY               => '424 Failed Dependency', // A WebDAV/RFC2518 extension
+    self::HTTP_UNORDERED_COLLECTION            => '425 Unordered Collection', // A WebDAV RFC 3648 extension (obsolete)
+    self::HTTP_UPGRADE_REQUIRED                => '426 Upgrade Required', // an RFC2817 extension
+    self::HTTP_RETRY_WITH                      => '449 Retry With', // a Microsoft extension
     self::HTTP_INTERNAL_SERVER_ERROR           => '500 Internal Server Error',
     self::HTTP_NOT_IMPLEMENTED                 => '501 Not Implemented',
     self::HTTP_BAD_GATEWAY                     => '502 Bad Gateway',
     self::HTTP_SERVICE_UNAVAILABLE             => '503 Service Unavailable',
     self::HTTP_GATEWAY_TIMEOUT                 => '504 Gateway Timeout',
     self::HTTP_HTTP_VERSION_NOT_SUPPORTED      => '505 HTTP Version Not Supported',
-    self::HTTP_VARIANT_ALSO_VARIES             => '506 Variant Also Negotiates', # an RFC2295 extension
-    self::HTTP_INSUFFICIENT_STORAGE            => '507 Insufficient Storage (WebDAV)', # A WebDAV extension
+    self::HTTP_VARIANT_ALSO_VARIES             => '506 Variant Also Negotiates', // an RFC2295 extension
+    self::HTTP_INSUFFICIENT_STORAGE            => '507 Insufficient Storage (WebDAV)', // A WebDAV extension
     self::HTTP_BANDWIDTH_LIMIT_EXCEEDED        => '509 Bandwidth Limit Exceeded',
-    self::HTTP_NOT_EXTENDED                    => '510 Not Extended', # an RFC2774 extension
+    self::HTTP_NOT_EXTENDED                    => '510 Not Extended', // an RFC2774 extension
   );
   /**
    * @param $name string some string
@@ -713,5 +714,5 @@ EOS;
 
 } // class REST
 
-#require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDirectory.php';
+//require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDirectory.php';
 require_once dirname(__FILE__) . DIRECTORY_SEPARATOR . 'RESTDir.php';
